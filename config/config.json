@@ -1,0 +1,14 @@
+{
+  "global": {
+    "config_path": "",
+    "config_ros": "localization.json",
+    "config_logging": "localization.json",
+    "config_viewer": "localization.json",
+    "config_sensors": "localization.json",
+    "config_preprocess": "localization.json",
+    "config_odometry": "localization.json",
+    "config_sub_mapping": "localization.json",
+    "config_global_mapping": "localization.json",
+    "config_localization": "localization.json"
+  }
+}

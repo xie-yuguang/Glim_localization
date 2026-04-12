@@ -1,0 +1,103 @@
+{
+  "glim_ros": {
+    "imu_topic": "/imu",
+    "points_topic": "/points",
+    "image_topic": "",
+    "keep_raw_points": false,
+    "imu_time_offset": 0.0,
+    "points_time_offset": 0.0,
+    "acc_scale": 0.0,
+    "enable_local_mapping": false,
+    "enable_global_mapping": false,
+    "extension_modules": ["liblocalization_publisher.so"]
+  },
+  "odometry_estimation": {
+    "so_name": "libodometry_estimation_localization_cpu.so",
+    "initialization_mode": "LOOSE",
+    "smoother_lag": 5.0,
+    "fix_imu_bias": false,
+    "validate_imu": true,
+    "save_imu_rate_trajectory": false,
+    "num_threads": 4
+  },
+  "localization": {
+    "map_path": "",
+    "map": {
+      "load_voxelmaps": true,
+      "load_raw_frames": false,
+      "strict": true
+    },
+    "trajectory_path": "/tmp/glim_localization_traj.txt",
+    "map_frame": "map",
+    "odom_frame": "odom",
+    "base_frame": "base_link",
+    "sensor_frame": "lidar",
+    "initial_pose": {
+      "source": "config",
+      "xyz": [0.0, 0.0, 0.0],
+      "rpy": [0.0, 0.0, 0.0]
+    },
+    "target_map": {
+      "max_num_submaps": 8,
+      "max_distance": 40.0,
+      "update_distance": 2.0,
+      "update_angle": 0.2,
+      "use_submap_index": true,
+      "index_resolution": 20.0
+    },
+    "matching": {
+      "method": "cpu_gicp",
+      "max_iterations": 20,
+      "min_score": 0.35,
+      "min_inliers": 30,
+      "max_residual": 1000000.0,
+      "max_pose_correction_translation": 3.0,
+      "max_pose_correction_angle": 0.7,
+      "max_consecutive_rejections": 3,
+      "max_correspondence_distance": 2.0,
+      "pose_prior_precision": 1000.0,
+      "num_threads": 4,
+      "vgicp_resolution": 0.5,
+      "vgicp_voxelmap_levels": 2,
+      "vgicp_voxelmap_scaling_factor": 2.0
+    },
+    "relocalization": {
+      "enable": true,
+      "max_candidates": 5,
+      "num_rings": 20,
+      "num_sectors": 60,
+      "min_radius": 1.0,
+      "max_radius": 80.0,
+      "max_descriptor_distance": 0.35
+    },
+    "ros": {
+      "publish_tf": true,
+      "publish_debug_target_map": true,
+      "initial_pose_topic": "/initialpose",
+      "relocalization_service": "/localization/relocalize",
+      "status_topic": "/localization/status",
+      "odom_topic": "/localization/odom",
+      "pose_topic": "/localization/pose",
+      "target_map_topic": "/localization/target_map"
+    }
+  },
+  "sensors": {
+    "T_lidar_imu": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+    "imu_bias_noise": 0.001,
+    "imu_bias": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    "intensity_field": "intensity",
+    "ring_field": ""
+  },
+  "preprocess": {
+  },
+  "logging": {
+  },
+  "viewer": {
+  },
+  "sub_mapping": {
+    "so_name": ""
+  },
+  "global_mapping": {
+    "so_name": ""
+  }
+}
