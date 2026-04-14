@@ -80,7 +80,12 @@ int main() {
     "      \"num_threads\": 7\n"
     "    },\n"
     "    \"ros\": {\n"
-    "      \"pose_topic\": \"/test_pose\"\n"
+    "      \"pose_topic\": \"/test_pose\",\n"
+    "      \"trajectory_topic\": \"/test_traj\",\n"
+    "      \"input_scan_topic\": \"/test_input_scan\",\n"
+    "      \"current_scan_topic\": \"/test_scan\",\n"
+    "      \"target_map_topic\": \"/test_target\",\n"
+    "      \"active_submaps_topic\": \"/test_active_submaps\"\n"
     "    }\n"
     "  }\n"
     "}\n");
@@ -99,6 +104,11 @@ int main() {
   expect(std::abs(options.matching.min_score - 0.42) < 1e-9, "matching.min_score must be parsed");
   expect(options.matching.num_threads == 7, "matching.num_threads must be parsed");
   expect(options.ros.pose_topic == "/test_pose", "ros.pose_topic must be parsed");
+  expect(options.ros.trajectory_topic == "/test_traj", "ros.trajectory_topic must be parsed");
+  expect(options.ros.input_scan_topic == "/test_input_scan", "ros.input_scan_topic must be parsed");
+  expect(options.ros.current_scan_topic == "/test_scan", "ros.current_scan_topic must be parsed");
+  expect(options.ros.target_map_topic == "/test_target", "ros.target_map_topic must be parsed");
+  expect(options.ros.active_submaps_topic == "/test_active_submaps", "ros.active_submaps_topic must be parsed");
 
   fs::remove_all(temp_dir);
   std::cout << "test_localization_options passed" << std::endl;

@@ -132,7 +132,11 @@ registration 接受条件来自当前代码：
 | `localization.ros.status_topic` | string | `/localization/status` | 否 | localization 状态输出 topic。 | `/localization/status` | 发布 `std_msgs/msg/String`，内容为状态名和 score。 |
 | `localization.ros.odom_topic` | string | `/localization/odom` | 否 | odometry 输出 topic。 | `/localization/odom` | 发布 `nav_msgs/msg/Odometry`，frame 为 `odom_frame`，child 为 `base_frame`。 |
 | `localization.ros.pose_topic` | string | `/localization/pose` | 否 | pose 输出 topic。 | `/localization/pose` | 发布 `geometry_msgs/msg/PoseStamped`，frame 为 `map_frame`。 |
-| `localization.ros.target_map_topic` | string | `/localization/target_map` | 否 | debug target map 点云 topic。 | `/localization/target_map` | 发布 active submaps 合并后的 `sensor_msgs/msg/PointCloud2`。 |
+| `localization.ros.trajectory_topic` | string | `/localization/trajectory` | 否 | 轨迹可视化 topic。 | `/localization/trajectory` | 发布 `nav_msgs/msg/Path`，内容为当前累计 `T_map_imu` 轨迹。 |
+| `localization.ros.input_scan_topic` | string | `/localization/debug/input_scan` | 否 | 当前输入 scan 可视化 topic。 | `/localization/debug/input_scan` | 发布预处理后的原始输入点云，frame 为 `sensor_frame`。 |
+| `localization.ros.current_scan_topic` | string | `/localization/debug/current_scan` | 否 | 当前 deskewed scan 可视化 topic。 | `/localization/debug/current_scan` | 发布当前用于定位的 deskewed scan，并已变换到 `map_frame`。 |
+| `localization.ros.target_map_topic` | string | `/localization/debug/local_target_map` | 否 | debug local target map 点云 topic。 | `/localization/debug/local_target_map` | 发布 active submaps 合并后的 `sensor_msgs/msg/PointCloud2`。 |
+| `localization.ros.active_submaps_topic` | string | `/localization/debug/active_submaps` | 否 | active submap ids debug marker topic。 | `/localization/debug/active_submaps` | 发布 `visualization_msgs/msg/Marker`，内容包含状态、score 和 active submap ids。 |
 
 ## 7. ROS runtime / 输入相关配置
 
@@ -184,8 +188,12 @@ registration 接受条件来自当前代码：
 | 参数路径 | 类型 | 默认值 | 是否必填 | 含义 | 推荐值 | 对运行行为的影响 |
 |---|---:|---|---|---|---|---|
 | `localization.trajectory_path` | string | `/tmp/glim_localization_traj.txt` | 否 | 文件级定位结果记录。 | 调试时保持非空 | 用于离线检查每帧 pose、状态和 matching score。 |
+| `localization.ros.trajectory_topic` | string | `/localization/trajectory` | 否 | 在线轨迹可视化输出。 | `/localization/trajectory` | RViz 中用 `Path` 显示累计定位轨迹。 |
+| `localization.ros.input_scan_topic` | string | `/localization/debug/input_scan` | 否 | 输入 scan 输出。 | `/localization/debug/input_scan` | RViz 中保留传感器坐标系视角，检查输入点云本身是否正常。 |
+| `localization.ros.current_scan_topic` | string | `/localization/debug/current_scan` | 否 | 当前 deskewed scan 输出。 | `/localization/debug/current_scan` | RViz 中直接叠加到 local target map 检查配准效果。 |
 | `localization.ros.publish_debug_target_map` | bool | `true` | 否 | 是否允许发布 debug target map。 | 调试时 `true`，性能测试时 `false` | 为 true 且有订阅者时才构建并发布 target cloud。 |
-| `localization.ros.target_map_topic` | string | `/localization/target_map` | 否 | debug target map 输出 topic。 | `/localization/target_map` | 用于 RViz 检查当前 active submaps 是否合理。 |
+| `localization.ros.target_map_topic` | string | `/localization/debug/local_target_map` | 否 | debug target map 输出 topic。 | `/localization/debug/local_target_map` | 用于 RViz 检查当前 active submaps 是否合理。 |
+| `localization.ros.active_submaps_topic` | string | `/localization/debug/active_submaps` | 否 | active submaps marker 输出 topic。 | `/localization/debug/active_submaps` | 在 RViz 中显示状态、score 和当前 active submap ids。 |
 | `odometry_estimation.validate_imu` | bool | `true` | 否 | IMU 输入诊断。 | `true` | 可帮助发现异常 IMU 数据。 |
 
 此外，registration rejection 日志中会输出：
@@ -302,7 +310,11 @@ registration 接受条件来自当前代码：
       "status_topic": "/localization/status",
       "odom_topic": "/localization/odom",
       "pose_topic": "/localization/pose",
-      "target_map_topic": "/localization/target_map"
+      "trajectory_topic": "/localization/trajectory",
+      "input_scan_topic": "/localization/debug/input_scan",
+      "current_scan_topic": "/localization/debug/current_scan",
+      "target_map_topic": "/localization/debug/local_target_map",
+      "active_submaps_topic": "/localization/debug/active_submaps"
     }
   },
   "sensors": {

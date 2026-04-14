@@ -349,7 +349,11 @@ ls install/glim_localization/lib/glim_localization/benchmark_localization
       "status_topic": "/localization/status",
       "odom_topic": "/localization/odom",
       "pose_topic": "/localization/pose",
-      "target_map_topic": "/localization/target_map"
+      "trajectory_topic": "/localization/trajectory",
+      "input_scan_topic": "/localization/debug/input_scan",
+      "current_scan_topic": "/localization/debug/current_scan",
+      "target_map_topic": "/localization/debug/local_target_map",
+      "active_submaps_topic": "/localization/debug/active_submaps"
     }
   },
   "sensors": {
@@ -447,7 +451,11 @@ ls install/glim_localization/lib/glim_localization/benchmark_localization
 - `status_topic`：状态输出 topic。
 - `odom_topic`：odom 输出 topic。
 - `pose_topic`：pose 输出 topic。
-- `target_map_topic`：debug target map 输出 topic。
+- `trajectory_topic`：轨迹 `nav_msgs/Path` 输出 topic。
+- `input_scan_topic`：当前输入 scan 的传感器系点云输出 topic。
+- `current_scan_topic`：当前 deskewed scan 的 map-frame 点云输出 topic。
+- `target_map_topic`：debug local target map 输出 topic。
+- `active_submaps_topic`：active submap ids 的 `visualization_msgs/Marker` 输出 topic。
 
 `sensors`：
 
@@ -735,10 +743,25 @@ ros2 run glim_ros glim_rosnode \
 - `/localization/pose`
   - 类型：`geometry_msgs/msg/PoseStamped`
   - `header.frame_id = map`
-- `/localization/target_map`
+- `/localization/trajectory`
+  - 类型：`nav_msgs/msg/Path`
+  - `header.frame_id = map`
+- `/localization/debug/input_scan`
+  - 类型：`sensor_msgs/msg/PointCloud2`
+  - frame 为 `sensor_frame`
+  - 内容为当前输入 scan，直接复用预处理后的原始 LiDAR 点云
+- `/localization/debug/current_scan`
+  - 类型：`sensor_msgs/msg/PointCloud2`
+  - frame 为 `map`
+  - 内容为当前用于定位的 deskewed scan
+- `/localization/debug/local_target_map`
   - 类型：`sensor_msgs/msg/PointCloud2`
   - frame 为 `map`
   - 仅当 `publish_debug_target_map = true` 且 topic 有订阅者时构建并发布
+- `/localization/debug/active_submaps`
+  - 类型：`visualization_msgs/msg/Marker`
+  - frame 为 `map`
+  - 文本内容包含 localization 状态、matching score 和 active submap ids
 
 服务：
 
@@ -792,7 +815,7 @@ ros2 topic pub --once /initialpose geometry_msgs/msg/PoseWithCovarianceStamped "
 - 在线 topic 输入复用 `glim_rosnode`。
 - `/initialpose` 订阅。
 - status / pose / odom / TF 发布。
-- debug target map 发布。
+- trajectory / input scan / current scan / debug target map / active submap marker 发布。
 - `/localization/relocalize` 服务。
 
 当前未实现或待补充：
@@ -800,8 +823,47 @@ ros2 topic pub --once /initialpose geometry_msgs/msg/PoseWithCovarianceStamped "
 - 独立 `glim_localization_ros` 包。
 - 完整生命周期节点或 launch 文件。
 - 完整 `map->odom` reset 管理。
-- RViz 配置文件。
 - 与外部定位系统的标准 covariance 输出，目前 publisher 没有填充完整 pose covariance。
+
+### 8.5 RViz 实时可视化
+
+当前推荐直接复用 `glim_rosnode` + `liblocalization_publisher.so` 的 ROS2 输出，在 RViz 中添加以下显示项：
+
+也可以直接加载预设配置：
+
+```bash
+rviz2 -d install/glim_localization/share/glim_localization/rviz/localization.rviz
+```
+
+- `TF`
+- `Odometry`
+  Topic 设为 `/localization/odom`
+- `Pose`
+  Topic 设为 `/localization/pose`
+- `Path`
+  Topic 设为 `/localization/trajectory`
+- `PointCloud2`
+  Topic 设为 `/localization/debug/input_scan`
+- `PointCloud2`
+  Topic 设为 `/localization/debug/current_scan`
+- `PointCloud2`
+  Topic 设为 `/localization/debug/local_target_map`
+- `Marker`
+  Topic 设为 `/localization/debug/active_submaps`
+
+坐标系建议：
+
+- `Fixed Frame` 设为 `map`
+- `/localization/pose`、`/localization/trajectory`、`/localization/debug/current_scan`、`/localization/debug/local_target_map` 都按 `map` frame 发布
+- `/localization/odom` 按 `odom -> base_link` 语义发布
+- TF 额外发布 `map -> odom`
+
+说明：
+
+- `/localization/debug/input_scan` 保留输入 scan 的传感器坐标系视角，默认 frame 是 `sensor_frame`，便于检查原始输入是否正常。
+- `/localization/debug/current_scan` 是当前用于定位的 deskewed scan，并已变换到 `map` frame，方便直接与 local target map 叠加观察。
+- `/localization/debug/local_target_map` 是当前 active submaps 合并得到的局部目标地图，不是整张离线地图的全量点云。
+- `/localization/debug/active_submaps` 会在当前位姿附近显示状态、matching score 和 active submap ids。
 
 ## 9. 输出说明
 
@@ -838,6 +900,96 @@ stamp x y z qx qy qz qw status_int matching_score
 /tmp/glim_localization_traj.txt
 ```
 
+只要 `localization.trajectory_path` 非空且可写，`TrajectoryWriter` 就会在每次定位更新时追加一行结果。
+
+### 9.1.1 离线轨迹可视化脚本
+
+项目现在提供独立工具：
+
+```text
+tools/plot_trajectory.py
+```
+
+依赖：
+
+- Python 3
+- `matplotlib`
+- 不需要 `numpy`
+
+如果环境里没有 `matplotlib`：
+
+```bash
+python3 -m pip install matplotlib
+```
+
+最常用的命令：
+
+```bash
+python3 tools/plot_trajectory.py /tmp/glim_localization_traj.txt
+```
+
+默认会同时生成：
+
+- `/tmp/glim_localization_traj_2d.png`
+- `/tmp/glim_localization_traj_3d.png`
+
+常用参数：
+
+- `--plot-2d`：只生成 2D 俯视图
+- `--plot-3d`：只生成 3D 轨迹图
+- `--show-arrows`：显示稀疏姿态方向箭头
+- `--time-color`：按时间着色
+- `--output <path>`：指定输出路径
+
+示例：
+
+```bash
+python3 tools/plot_trajectory.py /tmp/glim_localization_traj.txt \
+  --plot-2d \
+  --show-arrows \
+  --time-color \
+  --output /tmp/localization_topdown.png
+```
+
+如果同时开启 2D 和 3D，`--output` 会作为前缀使用，例如：
+
+```bash
+python3 tools/plot_trajectory.py /tmp/glim_localization_traj.txt \
+  --show-arrows \
+  --time-color \
+  --output /tmp/localization_plot.png
+```
+
+会生成：
+
+- `/tmp/localization_plot_2d.png`
+- `/tmp/localization_plot_3d.png`
+
+脚本会在终端输出：
+
+- 帧数
+- 轨迹时长
+- 总路程
+- 起点/终点坐标
+- xyz bounds
+
+图像含义：
+
+- 2D 图：`x-y` 俯视轨迹，适合快速检查是否闭环、是否漂移、是否与预期路线一致
+- 3D 图：`x-y-z` 空间轨迹，适合检查上下坡、楼层变化或 z 方向异常
+- 绿色圆点：起点
+- 红色 X：终点
+- 橙色箭头：稀疏姿态朝向
+- 时间着色：颜色从早到晚变化，便于看轨迹推进顺序
+
+如何判断轨迹是否合理：
+
+- 起终点和地图坐标系方向是否符合预期
+- 局部轨迹是否连续，是否存在明显跳变
+- z 方向是否异常抖动
+- 当 `status_int` 多数为 `3` 时，轨迹通常应更平滑稳定
+- 如果 2D 图中出现大幅瞬移，通常要回查初始位姿、重定位或 scan-to-map 匹配质量
+
 ### 9.2 ROS 输出
 
 `/localization/status`：
@@ -859,11 +1011,29 @@ stamp x y z qx qy qz qw status_int matching_score
 - 当前 pose 为 `T_odom_imu = T_map_odom.inverse() * T_map_imu`
 - twist linear 来自 GLIM estimation frame 的 `v_world_imu`
 
-`/localization/target_map`：
+`/localization/debug/local_target_map`：
 
 - `sensor_msgs/msg/PointCloud2`
 - frame 为 `map`
 - 内容为 active submaps 的点云转换到 map frame 后合并。
+
+`/localization/trajectory`：
+
+- `nav_msgs/msg/Path`
+- frame 为 `map`
+- 内容为当前累计的 `T_map_imu` 轨迹。
+
+`/localization/debug/current_scan`：
+
+- `sensor_msgs/msg/PointCloud2`
+- frame 为 `map`
+- 内容为当前用于定位的 deskewed scan，已变换到 map frame。
+
+`/localization/debug/input_scan`：
+
+- `sensor_msgs/msg/PointCloud2`
+- frame 为 `sensor_frame`
+- 内容为当前输入 scan，保留传感器坐标系视角，方便和 map-frame 的 deskewed scan 对照。
 
 ### 9.3 坐标系约定
 
@@ -1118,7 +1288,7 @@ localization-only 使用已有地图，不应创建新 submap 或运行全局建
 
 并填写实际初始位姿。
 
-### Q7：`/localization/target_map` 为什么没有消息？
+### Q7：`/localization/debug/local_target_map` 为什么没有消息？
 
 当前 publisher 只有在 `publish_debug_target_map = true` 且该 topic 有订阅者时才构建并发布 debug cloud。先在 RViz 或命令行订阅该 topic。
 

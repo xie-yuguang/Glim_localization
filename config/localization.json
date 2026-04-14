@@ -1,8 +1,8 @@
 {
   "glim_ros": {
     "imu_topic": "/imu",
-    "points_topic": "/points",
-    "image_topic": "",
+    "points_topic": "/rslidar_points",
+    "image_topic": "/images",
     "keep_raw_points": false,
     "imu_time_offset": 0.0,
     "points_time_offset": 0.0,
@@ -21,7 +21,7 @@
     "num_threads": 4
   },
   "localization": {
-    "map_path": "",
+    "map_path": "/home/xie/workspace/Glim/ceshichang2",
     "map": {
       "load_voxelmaps": true,
       "load_raw_frames": false,
@@ -46,7 +46,7 @@
       "index_resolution": 20.0
     },
     "matching": {
-      "method": "cpu_gicp",
+      "method": "cpu_gicp",  
       "max_iterations": 20,
       "min_score": 0.35,
       "min_inliers": 30,
@@ -78,7 +78,11 @@
       "status_topic": "/localization/status",
       "odom_topic": "/localization/odom",
       "pose_topic": "/localization/pose",
-      "target_map_topic": "/localization/target_map"
+      "trajectory_topic": "/localization/trajectory",
+      "input_scan_topic": "/localization/debug/input_scan",
+      "current_scan_topic": "/localization/debug/current_scan",
+      "target_map_topic": "/localization/debug/local_target_map",
+      "active_submaps_topic": "/localization/debug/active_submaps"
     }
   },
   "sensors": {

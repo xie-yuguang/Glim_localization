@@ -81,6 +81,10 @@ GLIM dump 地图 + ROS2 rosbag + 初始位姿 -> 离线定位 -> 输出轨迹文
    - `x y z`：米
    - `roll pitch yaw`：弧度
 
+5. 一个用于观察结果的 RViz2。
+
+   当前最小实时可视化直接复用 `liblocalization_publisher.so` 的 ROS2 topic 输出，不需要额外启动新的 viewer 进程。
+
 ## 3. 3~5 步快速跑通流程
 
 ### Step 1：编译
@@ -167,6 +171,34 @@ tail /tmp/glim_localization_traj.txt
 
 只要文件存在且持续写入多行，就说明离线闭环已经跑通。
 
+### Step 6：在 RViz 中检查实时可视化
+
+运行 bag 时打开另一个终端：
+
+```bash
+source install/setup.bash
+rviz2 -d install/glim_localization/share/glim_localization/rviz/localization.rviz
+```
+
+在 RViz 中建议：
+
+- `Fixed Frame` 设为 `map`
+- 添加 `TF`
+- 添加 `Odometry`，topic 设为 `/localization/odom`
+- 添加 `Pose`，topic 设为 `/localization/pose`
+- 添加 `Path`，topic 设为 `/localization/trajectory`
+- 添加 `PointCloud2`，topic 设为 `/localization/debug/input_scan`
+- 添加 `PointCloud2`，topic 设为 `/localization/debug/current_scan`
+- 添加 `PointCloud2`，topic 设为 `/localization/debug/local_target_map`
+- 添加 `Marker`，topic 设为 `/localization/debug/active_submaps`
+
+这些 topic 中：
+
+- `/localization/debug/input_scan` 是当前输入 scan，保留 `sensor_frame` 下的传感器视角
+- `/localization/debug/current_scan` 是已经 deskew 并对齐到 `map` frame 的当前 scan
+- `/localization/debug/local_target_map` 是当前 active submaps 合并出的局部目标地图
+- `/localization/debug/active_submaps` 显示当前状态、matching score 和 active submap ids
+
 ## 4. 最小配置示例
 
 脚本会自动生成临时配置并覆盖最关键字段。你也可以手动参考下面的最小配置片段：
@@ -209,6 +241,15 @@ tail /tmp/glim_localization_traj.txt
       "max_correspondence_distance": 2.0,
       "pose_prior_precision": 1000.0,
       "num_threads": 4
+    },
+    "ros": {
+      "pose_topic": "/localization/pose",
+      "odom_topic": "/localization/odom",
+      "trajectory_topic": "/localization/trajectory",
+      "input_scan_topic": "/localization/debug/input_scan",
+      "current_scan_topic": "/localization/debug/current_scan",
+      "target_map_topic": "/localization/debug/local_target_map",
+      "active_submaps_topic": "/localization/debug/active_submaps"
     }
   },
   "sensors": {
@@ -274,6 +315,25 @@ scan-to-map registration accepted ...
 localization publisher extension initialized
 ```
 
+并且可以在另一个终端看到这些 topic：
+
+```bash
+ros2 topic list | grep /localization
+```
+
+最少应包含：
+
+```text
+/localization/status
+/localization/pose
+/localization/odom
+/localization/trajectory
+/localization/debug/input_scan
+/localization/debug/current_scan
+/localization/debug/local_target_map
+/localization/debug/active_submaps
+```
+
 ### 轨迹文件
 
 默认轨迹文件：
@@ -306,6 +366,46 @@ tail /tmp/glim_localization_traj.txt
 ```
 
 如果最后几行的 `status_int` 多数是 `3`，通常表示 tracking 正常。
+
+### 离线轨迹出图
+
+只要 `localization.trajectory_path` 非空，定位运行过程中就会生成 `glim_localization_traj.txt`。
+
+如果环境里还没有 `matplotlib`：
+
+```bash
+python3 -m pip install matplotlib
+```
+
+生成 2D 和 3D 轨迹图：
+
+```bash
+python3 tools/plot_trajectory.py /tmp/glim_localization_traj.txt
+```
+
+只生成 2D 俯视图，并显示方向箭头和时间着色：
+
+```bash
+python3 tools/plot_trajectory.py /tmp/glim_localization_traj.txt \
+  --plot-2d \
+  --show-arrows \
+  --time-color \
+  --output /tmp/glim_localization_topdown.png
+```
+
+脚本会输出：
+
+- 帧数
+- 总路程
+- 起点/终点坐标
+- xyz bounds
+
+生成图片的含义：
+
+- 2D 图主要看平面路线是否连续、是否突然跳变
+- 3D 图主要看 z 方向是否稳定
+- 绿色圆点是起点，红色 X 是终点
+- 开启 `--time-color` 后，颜色变化表示轨迹推进顺序
 
 ## 7. 最常见的 5 个报错和解决办法
 

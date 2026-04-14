@@ -34,6 +34,7 @@ if(DEFINED ENV{ROS_VERSION})
     find_package(sensor_msgs REQUIRED)
     find_package(geometry_msgs REQUIRED)
     find_package(tf2_ros REQUIRED)
+    find_package(visualization_msgs REQUIRED)
   elseif($ENV{ROS_VERSION} EQUAL 1)
     find_package(catkin REQUIRED)
   endif()
@@ -99,6 +100,7 @@ if(DEFINED ENV{ROS_VERSION})
       sensor_msgs
       geometry_msgs
       tf2_ros
+      visualization_msgs
     )
     list(APPEND glim_localization_LIBRARIES localization_publisher)
   endif()
@@ -124,7 +126,12 @@ endif()
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(DIRECTORY config DESTINATION ${CMAKE_INSTALL_DATADIR})
-install(PROGRAMS tools/run_offline_localization.sh DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY rviz DESTINATION ${CMAKE_INSTALL_DATADIR})
+install(PROGRAMS
+  tools/run_offline_localization.sh
+  tools/plot_trajectory.py
+  DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
 install(TARGETS ${glim_localization_LIBRARIES}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -232,7 +239,7 @@ if(DEFINED ENV{ROS_VERSION})
     ament_target_dependencies(glim_localization glim)
     ament_target_dependencies(odometry_estimation_localization_cpu glim)
     ament_export_include_directories(include)
-    ament_export_dependencies(glim gtsam_points spdlog rclcpp std_msgs std_srvs nav_msgs sensor_msgs geometry_msgs tf2_ros)
+    ament_export_dependencies(glim gtsam_points spdlog rclcpp std_msgs std_srvs nav_msgs sensor_msgs geometry_msgs tf2_ros visualization_msgs)
     ament_export_libraries(${glim_localization_LIBRARIES})
     ament_package()
   elseif($ENV{ROS_VERSION} EQUAL 1)

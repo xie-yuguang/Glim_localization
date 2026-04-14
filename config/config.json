@@ -1,6 +1,6 @@
 {
   "global": {
-    "config_path": "",
+    "config_path": "/home/xie/Glim/src/Glim_localization/config",
     "config_ros": "localization.json",
     "config_logging": "localization.json",
     "config_viewer": "localization.json",

@@ -51,7 +51,11 @@ struct RosOutputOptions {
   std::string status_topic = "/localization/status";
   std::string odom_topic = "/localization/odom";
   std::string pose_topic = "/localization/pose";
-  std::string target_map_topic = "/localization/target_map";
+  std::string trajectory_topic = "/localization/trajectory";
+  std::string input_scan_topic = "/localization/debug/input_scan";
+  std::string current_scan_topic = "/localization/debug/current_scan";
+  std::string target_map_topic = "/localization/debug/local_target_map";
+  std::string active_submaps_topic = "/localization/debug/active_submaps";
 };
 
 struct LocalizationOptions {

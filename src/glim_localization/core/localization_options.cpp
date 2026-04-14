@@ -113,7 +113,11 @@ LocalizationOptions LocalizationOptions::load() {
   options.ros.status_topic = config.param_nested<std::string>({"localization", "ros"}, "status_topic", options.ros.status_topic);
   options.ros.odom_topic = config.param_nested<std::string>({"localization", "ros"}, "odom_topic", options.ros.odom_topic);
   options.ros.pose_topic = config.param_nested<std::string>({"localization", "ros"}, "pose_topic", options.ros.pose_topic);
+  options.ros.trajectory_topic = config.param_nested<std::string>({"localization", "ros"}, "trajectory_topic", options.ros.trajectory_topic);
+  options.ros.input_scan_topic = config.param_nested<std::string>({"localization", "ros"}, "input_scan_topic", options.ros.input_scan_topic);
+  options.ros.current_scan_topic = config.param_nested<std::string>({"localization", "ros"}, "current_scan_topic", options.ros.current_scan_topic);
   options.ros.target_map_topic = config.param_nested<std::string>({"localization", "ros"}, "target_map_topic", options.ros.target_map_topic);
+  options.ros.active_submaps_topic = config.param_nested<std::string>({"localization", "ros"}, "active_submaps_topic", options.ros.active_submaps_topic);
 
   return options;
 }

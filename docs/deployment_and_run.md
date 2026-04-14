@@ -609,7 +609,11 @@ ros2 topic pub --once /initialpose geometry_msgs/msg/PoseWithCovarianceStamped "
 - `/localization/status`，`std_msgs/msg/String`
 - `/localization/odom`，`nav_msgs/msg/Odometry`
 - `/localization/pose`，`geometry_msgs/msg/PoseStamped`
-- `/localization/target_map`，`sensor_msgs/msg/PointCloud2`
+- `/localization/trajectory`，`nav_msgs/msg/Path`
+- `/localization/debug/input_scan`，`sensor_msgs/msg/PointCloud2`
+- `/localization/debug/current_scan`，`sensor_msgs/msg/PointCloud2`
+- `/localization/debug/local_target_map`，`sensor_msgs/msg/PointCloud2`
+- `/localization/debug/active_submaps`，`visualization_msgs/msg/Marker`
 - TF：
   - `map -> odom`
   - `odom -> base_link`
@@ -697,6 +701,64 @@ stamp x y z qx qy qz qw status_int matching_score
 
 如果多数输出为 `status_int = 3`，说明 tracking 基本正常。
 
+### 10.3.1 离线轨迹可视化
+
+轨迹文件由 `TrajectoryWriter` 生成，只要 `localization.trajectory_path` 非空且可写，就会持续写出：
+
+```text
+/tmp/glim_localization_traj.txt
+```
+
+如果环境里没有 `matplotlib`：
+
+```bash
+python3 -m pip install matplotlib
+```
+
+使用项目自带脚本生成轨迹图：
+
+```bash
+python3 tools/plot_trajectory.py /tmp/glim_localization_traj.txt
+```
+
+默认会生成：
+
+- `/tmp/glim_localization_traj_2d.png`
+- `/tmp/glim_localization_traj_3d.png`
+
+常用用法：
+
+```bash
+python3 tools/plot_trajectory.py /tmp/glim_localization_traj.txt \
+  --plot-2d \
+  --show-arrows \
+  --time-color \
+  --output /tmp/localization_overview.png
+```
+
+脚本会输出统计信息：
+
+- 帧数
+- 轨迹时长
+- 总路程
+- 起点/终点坐标
+- xyz bounds
+
+如何解读图片：
+
+- 2D 图用于看俯视轨迹是否连续、是否有明显瞬移
+- 3D 图用于看 z 方向变化是否合理
+- 绿色圆点表示起点，红色 X 表示终点
+- 橙色箭头表示稀疏姿态朝向
+- 时间着色可用于检查轨迹推进顺序和回跳位置
+
+如何判断轨迹是否合理：
+
+- 起点是否接近配置或 `/initialpose` 指定的初始位置
+- 主体轨迹是否与场景路线一致
+- 是否存在明显断裂、跳点或反常回拉
+- 若 `status_int` 大段不是 `3`，需要结合 score 和状态切换一起排查
+
 ### 10.4 验证在线 topic
 
 ```bash
@@ -704,6 +766,7 @@ ros2 topic list | grep localization
 ros2 topic echo /localization/status
 ros2 topic echo /localization/pose
 ros2 topic echo /localization/odom
+ros2 topic echo /localization/trajectory --once
 ```
 
 检查 TF：
@@ -713,15 +776,49 @@ ros2 run tf2_ros tf2_echo map odom
 ros2 run tf2_ros tf2_echo odom base_link
 ```
 
-检查 debug target map：
+检查可视化 debug topic：
 
 ```bash
-ros2 topic echo /localization/target_map --once
+ros2 topic echo /localization/debug/local_target_map --once
+ros2 topic echo /localization/debug/active_submaps --once
 ```
 
-注意：当前 debug target map 只有在 `publish_debug_target_map=true` 且存在订阅者时才构建并发布。
+注意：
 
-### 10.5 运行单元测试
+- `publish_debug_target_map=true` 且存在订阅者时才会构建并发布 `/localization/debug/local_target_map`
+- `/localization/debug/input_scan` 保留输入 scan 的传感器坐标系视角，默认 frame 为 `sensor_frame`
+- `/localization/debug/current_scan` 是当前用于定位的 deskewed scan，并已变换到 `map` frame
+- `/localization/debug/active_submaps` 使用 `visualization_msgs/Marker` 显示状态、score 和 active submap ids
+
+### 10.5 用 RViz 验证实时可视化
+
+启动 RViz：
+
+```bash
+source install/setup.bash
+rviz2 -d install/glim_localization/share/glim_localization/rviz/localization.rviz
+```
+
+建议的 RViz 配置：
+
+- `Fixed Frame` 设为 `map`
+- 添加 `TF`
+- 添加 `Odometry`
+  Topic 设为 `/localization/odom`
+- 添加 `Pose`
+  Topic 设为 `/localization/pose`
+- 添加 `Path`
+  Topic 设为 `/localization/trajectory`
+- 添加 `PointCloud2`
+  Topic 设为 `/localization/debug/input_scan`
+- 添加 `PointCloud2`
+  Topic 设为 `/localization/debug/current_scan`
+- 添加 `PointCloud2`
+  Topic 设为 `/localization/debug/local_target_map`
+- 添加 `Marker`
+  Topic 设为 `/localization/debug/active_submaps`
+
+### 10.6 运行单元测试
 
 ```bash
 colcon test --packages-select glim_localization
