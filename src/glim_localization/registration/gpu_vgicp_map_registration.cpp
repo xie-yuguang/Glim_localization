@@ -82,9 +82,12 @@ RegistrationResult GpuVgicpMapRegistration::align(
   lm_params.setAbsoluteErrorTol(0.1);
 
   try {
-    values = gtsam_points::LevenbergMarquardtOptimizerExt(graph, values, lm_params).optimize();
+    gtsam_points::LevenbergMarquardtOptimizerExt optimizer(graph, values, lm_params);
+    values = optimizer.optimize();
     result.T_map_imu = Eigen::Isometry3d(values.at<gtsam::Pose3>(0).matrix());
-    result.residual = graph.error(values);
+    // Reuse the optimizer's final nonlinear error instead of issuing an
+    // extra synchronous graph.error(values) on GPU factors.
+    result.residual = optimizer.error();
     result.score = std::exp(-std::min(100.0, result.residual / std::max(1, result.num_source_points)));
     result.num_inliers = static_cast<int>(std::lround(result.score * result.num_source_points));
     result.converged = true;
