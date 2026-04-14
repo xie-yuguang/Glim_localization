@@ -130,6 +130,15 @@ install(DIRECTORY rviz DESTINATION ${CMAKE_INSTALL_DATADIR})
 install(PROGRAMS
   tools/run_offline_localization.sh
   tools/plot_trajectory.py
+  tools/monitor/run_with_time.sh
+  tools/monitor/monitor_ps.sh
+  tools/monitor/monitor_pidstat.sh
+  tools/monitor/monitor_iostat.sh
+  tools/monitor/monitor_gpu.sh
+  tools/monitor/summarize_usage.py
+  tools/monitor/usage_report_lib.py
+  tools/monitor/plot_usage.py
+  tools/monitor/generate_usage_report.py
   DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(TARGETS ${glim_localization_LIBRARIES}

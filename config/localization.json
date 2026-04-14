@@ -21,7 +21,7 @@
     "num_threads": 4
   },
   "localization": {
-    "map_path": "/home/xie/workspace/Glim/ceshichang2",
+    "map_path": "/home/xie/Glim/data/map_data/ceshichang_128lidar/",
     "map": {
       "load_voxelmaps": true,
       "load_raw_frames": false,
@@ -46,7 +46,7 @@
       "index_resolution": 20.0
     },
     "matching": {
-      "method": "cpu_gicp",  
+      "method": "gpu_vgicp",  
       "max_iterations": 20,
       "min_score": 0.35,
       "min_inliers": 30,

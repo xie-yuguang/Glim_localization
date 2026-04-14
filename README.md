@@ -1169,6 +1169,91 @@ benchmark_localization <map_path> [num_queries] [max_distance] [max_num_submaps]
 
 该工具只 benchmark submap 查询，不运行完整 odometry / registration。
 
+### 10.4 运行资源监测
+
+`glim_localization` 已提供一套从第三方视角观察运行资源的外部脚本，默认不侵入主项目运行逻辑，适合做开发调试、实验记录和性能对比。
+
+脚本目录：
+
+```text
+Glim_localization/tools/monitor/
+```
+
+推荐入口：
+
+- 最小方案：`run_with_time.sh`
+- 增强方案：`run_with_time.sh --enhanced --gpu`
+
+离线 rosbag 示例：
+
+```bash
+bash Glim_localization/tools/monitor/run_with_time.sh \
+  -o /tmp/glim_monitor_offline \
+  -- \
+  ros2 run glim_ros glim_rosbag /path/to/your.bag \
+  --ros-args -p "config_path:=/home/xie/Glim/src/Glim_localization/config"
+```
+
+在线 ROS2 示例：
+
+```bash
+bash Glim_localization/tools/monitor/run_with_time.sh \
+  -o /tmp/glim_monitor_online \
+  --enhanced \
+  --gpu \
+  -- \
+  ros2 run glim_ros glim_rosnode \
+  --ros-args -p "config_path:=/home/xie/Glim/src/Glim_localization/config"
+```
+
+输出目录会自动生成：
+
+- `time.txt`：wall time / user time / sys time / max RSS
+- `ps_samples.csv`：每秒 CPU / 内存 / 线程 / I/O 采样
+- `pidstat_*.log`：增强模式下的 PID 和线程级统计
+- `gpu_*.csv`：GPU 利用率和显存占用
+- `summary.txt` / `summary.json`：汇总结果
+
+完整说明见：
+
+- `docs/resource_monitoring.md`
+
+### 10.5 资源图表与报告
+
+在已有监测日志基础上，还可以直接生成资源曲线图和一页式 HTML 报告，适合做实验记录、团队展示和移植前硬件评估。
+
+只生成图表和汇总表：
+
+```bash
+python3 Glim_localization/tools/monitor/plot_usage.py \
+  --input-dir /tmp/glim_monitor_offline \
+  --output-dir /tmp/glim_report_offline \
+  --title "glim_localization rosbag offline run"
+```
+
+生成完整报告：
+
+```bash
+python3 Glim_localization/tools/monitor/generate_usage_report.py \
+  --input-dir /tmp/glim_monitor_offline \
+  --output-dir /tmp/glim_report_offline \
+  --title "glim_localization rosbag offline run"
+```
+
+主要输出：
+
+- `cpu_usage.png`
+- `memory_usage.png`
+- `thread_usage.png`
+- `io_usage.png`
+- `gpu_usage.png`
+- `gpu_memory_usage.png`
+- `resource_summary.csv`
+- `resource_summary.json`
+- `resource_report.html`
+
+如果日志目录里没有 GPU 数据，工具会自动降级为 CPU-only 报告。
+
 ## 11. 调试建议
 
 ### 11.1 优先检查日志
