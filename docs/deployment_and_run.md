@@ -785,7 +785,54 @@ colcon build --symlink-install \
     -DBUILD_WITH_CV_BRIDGE=OFF
 ```
 
-### 11.4 找不到 `libodometry_estimation_localization_cpu.so`
+### 11.4 ROS2/ament 配置阶段报 `No module named 'catkin_pkg'`
+
+常见现象：
+
+```text
+ModuleNotFoundError: No module named 'catkin_pkg'
+```
+
+这通常不是 `glim_localization` 代码错误，而是 CMake/ament 误用了 Conda Python，导致 ROS2 所需的 Python 包不可见。
+
+处理建议：
+
+- 先退出当前 Conda 环境，或至少不要让 `miniconda3/bin` 位于本次构建 PATH 前部。
+- 显式指定系统 Python：
+
+```bash
+colcon build --symlink-install \
+  --packages-select glim_localization \
+  --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+```
+
+- 如果只是临时验证，也可以在干净 shell 中重新 `source /opt/ros/$ROS_DISTRO/setup.bash` 后再编译。
+
+### 11.5 链接阶段出现 `spdlog` / `fmt` ABI 混用错误
+
+常见现象：
+
+```text
+undefined reference to spdlog::details::log_msg...
+```
+
+或符号里同时出现 `fmt::v8` / `fmt::v9`。
+
+这通常意味着编译头文件和链接到的 `spdlog` / `fmt` 动态库来自不同环境，例如系统库和 Conda 库被混用。
+
+处理建议：
+
+- 避免在激活 Conda 的 shell 中编译 ROS2/GLIM。
+- 确保 `PATH`、`LD_LIBRARY_PATH`、`CMAKE_PREFIX_PATH` 不把 Conda 版本的 `fmt` / `spdlog` 混入系统构建。
+- 删除旧 build 目录后，在干净环境中重新配置：
+
+```bash
+rm -rf build install log
+source /opt/ros/$ROS_DISTRO/setup.bash
+colcon build --symlink-install --packages-up-to glim_ros glim_localization
+```
+
+### 11.6 找不到 `libodometry_estimation_localization_cpu.so`
 
 检查：
 
@@ -805,7 +852,7 @@ echo $LD_LIBRARY_PATH | tr ':' '\n' | grep glim_localization
 }
 ```
 
-### 11.5 找不到 `liblocalization_publisher.so`
+### 11.7 找不到 `liblocalization_publisher.so`
 
 检查：
 
@@ -835,7 +882,7 @@ echo $ROS_VERSION
 }
 ```
 
-### 11.6 `config_path` 不生效
+### 11.8 `config_path` 不生效
 
 `glim_ros2` 中相对 `config_path` 会按 `share/glim/<config_path>` 解析。建议始终传绝对路径：
 
@@ -851,7 +898,7 @@ config.json
 localization.json
 ```
 
-### 11.7 地图加载失败
+### 11.9 地图加载失败
 
 先运行：
 
@@ -867,7 +914,7 @@ ros2 run glim_localization glim_localization_map_info /path/to/glim_dump
 - `graph.txt` 前三行格式不对。
 - 缺少 `000000/data.txt` 等 submap 文件。
 
-### 11.8 rosbag 没有数据输入
+### 11.10 rosbag 没有数据输入
 
 检查 bag：
 
@@ -888,7 +935,7 @@ ros2 bag info /path/to/bag
 
 topic 名必须与 bag 完全一致。
 
-### 11.9 一直等待 `/initialpose`
+### 11.11 一直等待 `/initialpose`
 
 原因：
 
@@ -912,7 +959,7 @@ topic 名必须与 bag 完全一致。
 }
 ```
 
-### 11.10 registration 大量 rejected 或进入 LOST
+### 11.12 registration 大量 rejected 或进入 LOST
 
 常见原因：
 
@@ -957,7 +1004,7 @@ topic 名必须与 bag 完全一致。
 
 这些放宽参数用于排查，稳定运行时应根据数据质量重新收紧。
 
-### 11.11 安装后的 `run_offline_localization.sh` 如何定位配置
+### 11.13 安装后的 `run_offline_localization.sh` 如何定位配置
 
 当前脚本已经支持源码树和安装后的 ROS2 布局。源码树和安装后的常用入口分别是：
 

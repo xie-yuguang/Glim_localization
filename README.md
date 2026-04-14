@@ -236,6 +236,8 @@ ls install/glim_localization/lib/glim_localization/benchmark_localization
 - `find_package(glim REQUIRED)` 失败：`glim` 未安装或未 source 对应 workspace。
 - `find_package(gtsam_points REQUIRED)` 失败：`gtsam_points` 未安装或未被 CMake 找到。
 - ROS2 消息包找不到：没有 source ROS2 环境，或缺少 `nav_msgs`、`sensor_msgs`、`geometry_msgs`、`tf2_ros`。
+- ROS2/ament 配置阶段报 `ModuleNotFoundError: No module named 'catkin_pkg'`：常见于 CMake 误用了 Conda Python。优先退出 Conda 环境，或显式添加 `-DPython3_EXECUTABLE=/usr/bin/python3`。
+- 链接阶段出现 `spdlog` / `fmt` ABI 或 `fmt::v8` / `fmt::v9` 混用错误：通常是系统库和 Conda 库混用。建议避免把 `miniconda3/bin` 放在本次构建 PATH 前面，或在干净 shell 中重新配置并编译。
 - `liblocalization_publisher.so` 没有生成：当前环境没有设置 `ROS_VERSION=2`，或不是 ROS2 构建环境。
 - GPU 文件编译失败：CUDA/gtsam_points CUDA 版本不匹配。可先关闭 `BUILD_WITH_CUDA`。
 

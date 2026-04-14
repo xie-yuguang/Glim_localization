@@ -5,7 +5,10 @@
 #include <sstream>
 #include <spdlog/spdlog.h>
 
+#include <gtsam/geometry/Pose3.h>
 #include <gtsam/inference/Symbol.h>
+#include <gtsam/nonlinear/NonlinearFactorGraph.h>
+#include <gtsam/nonlinear/Values.h>
 #include <gtsam/slam/BetweenFactor.h>
 #include <gtsam/slam/PriorFactor.h>
 
@@ -336,13 +339,14 @@ gtsam::NonlinearFactorGraph OdometryEstimationLocalizationCPU::attempt_relocaliz
 
   Eigen::Isometry3d corrected_T_map_imu = result.registration.T_map_imu;
   corrected_T_map_imu.linear() = Eigen::Quaterniond(corrected_T_map_imu.linear()).normalized().toRotationMatrix();
+  const gtsam::Pose3 corrected_pose(corrected_T_map_imu.matrix());
 
   frames[current]->T_world_imu = corrected_T_map_imu;
   frames[current]->T_world_lidar = corrected_T_map_imu * frames[current]->T_lidar_imu.inverse();
-  new_values.insert_or_assign(X(current), gtsam::Pose3(corrected_T_map_imu.matrix()));
+  new_values.insert_or_assign(X(current), corrected_pose);
 
   const auto noise = gtsam::noiseModel::Isotropic::Precision(6, options_.matching.pose_prior_precision);
-  factors.emplace_shared<gtsam::PriorFactor<gtsam::Pose3>>(X(current), gtsam::Pose3(corrected_T_map_imu.matrix()), noise);
+  factors.emplace_shared<gtsam::PriorFactor<gtsam::Pose3>>(X(current), corrected_pose, noise);
 
   target_map_ = result.target_map;
   if (target_map_) {
@@ -420,18 +424,20 @@ gtsam::NonlinearFactorGraph OdometryEstimationLocalizationCPU::create_scan_to_ma
   consecutive_rejections_ = 0;
   Eigen::Isometry3d corrected_T_map_imu = last_registration_result_.T_map_imu;
   corrected_T_map_imu.linear() = Eigen::Quaterniond(corrected_T_map_imu.linear()).normalized().toRotationMatrix();
+  const gtsam::Pose3 corrected_pose(corrected_T_map_imu.matrix());
 
   frames[current]->T_world_imu = corrected_T_map_imu;
   frames[current]->T_world_lidar = corrected_T_map_imu * frames[current]->T_lidar_imu.inverse();
-  new_values.insert_or_assign(X(current), gtsam::Pose3(corrected_T_map_imu.matrix()));
+  new_values.insert_or_assign(X(current), corrected_pose);
 
   const auto noise = gtsam::noiseModel::Isotropic::Precision(6, options_.matching.pose_prior_precision);
-  factors.emplace_shared<gtsam::PriorFactor<gtsam::Pose3>>(X(current), gtsam::Pose3(corrected_T_map_imu.matrix()), noise);
+  factors.emplace_shared<gtsam::PriorFactor<gtsam::Pose3>>(X(current), corrected_pose, noise);
 
   if (current > 0 && frames[current - 1]) {
     Eigen::Isometry3d T_last_current = frames[current - 1]->T_world_imu.inverse() * corrected_T_map_imu;
     T_last_current.linear() = Eigen::Quaterniond(T_last_current.linear()).normalized().toRotationMatrix();
-    factors.emplace_shared<gtsam::BetweenFactor<gtsam::Pose3>>(X(current - 1), X(current), gtsam::Pose3(T_last_current.matrix()), noise);
+    const gtsam::Pose3 relative_pose(T_last_current.matrix());
+    factors.emplace_shared<gtsam::BetweenFactor<gtsam::Pose3>>(X(current - 1), X(current), relative_pose, noise);
   }
 
   logger->debug(

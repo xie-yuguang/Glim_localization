@@ -21,13 +21,18 @@ void expect(bool condition, const std::string& message) {
 
 std::vector<Eigen::Vector4d> make_pattern(int pattern_id) {
   std::vector<Eigen::Vector4d> points;
-  const int period = pattern_id == 2 ? 5 : 7;
-  const int offset = pattern_id == 2 ? 2 : 0;
   for (int sector = 0; sector < 36; sector++) {
     const double angle = sector * 2.0 * 3.14159265358979323846 / 36.0;
     for (int ring = 1; ring <= 8; ring++) {
       const double radius = 1.0 + ring;
-      const double z = 0.1 * ring + (((sector + offset) % period) == 0 ? 1.0 : 0.0);
+      double z = 0.1 * ring;
+      if (pattern_id == 2) {
+        z += ((sector + 2) % 5) == 0 ? 2.0 : 0.0;
+        z += (ring % 3) == 0 ? 0.4 : 0.0;
+      } else {
+        z += (sector % 7) == 0 ? 0.6 : 0.0;
+        z += (ring % 4) == 0 ? 0.1 : 0.0;
+      }
       points.emplace_back(radius * std::cos(angle), radius * std::sin(angle), z, 1.0);
     }
   }
@@ -69,6 +74,13 @@ int main() {
 
   const auto candidates = relocalizer.query(frame, 2);
   expect(!candidates.empty(), "query must return candidates");
+  if (candidates.front().submap_id != 2) {
+    std::cerr << "candidate ranking:";
+    for (const auto& candidate : candidates) {
+      std::cerr << " [id=" << candidate.submap_id << " dist=" << candidate.descriptor_distance << "]";
+    }
+    std::cerr << std::endl;
+  }
   expect(candidates.front().submap_id == 2, "best candidate must match the similar submap");
   expect(static_cast<bool>(candidates.front().submap), "candidate must carry submap pointer");
 

@@ -10,6 +10,7 @@ endif()
 
 find_package(glim REQUIRED)
 find_package(gtsam_points REQUIRED)
+find_package(spdlog REQUIRED)
 
 option(BUILD_WITH_CUDA "Build glim_localization GPU registration support" OFF)
 if(BUILD_WITH_CUDA)
@@ -61,6 +62,7 @@ target_include_directories(glim_localization PUBLIC
 target_link_libraries(glim_localization
   glim::glim
   gtsam_points::gtsam_points
+  spdlog::spdlog
 )
 
 add_library(odometry_estimation_localization_cpu SHARED
@@ -230,7 +232,7 @@ if(DEFINED ENV{ROS_VERSION})
     ament_target_dependencies(glim_localization glim)
     ament_target_dependencies(odometry_estimation_localization_cpu glim)
     ament_export_include_directories(include)
-    ament_export_dependencies(glim gtsam_points rclcpp std_msgs std_srvs nav_msgs sensor_msgs geometry_msgs tf2_ros)
+    ament_export_dependencies(glim gtsam_points spdlog rclcpp std_msgs std_srvs nav_msgs sensor_msgs geometry_msgs tf2_ros)
     ament_export_libraries(${glim_localization_LIBRARIES})
     ament_package()
   elseif($ENV{ROS_VERSION} EQUAL 1)
