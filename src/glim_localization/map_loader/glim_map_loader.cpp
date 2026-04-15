@@ -33,6 +33,7 @@ LocalizationMap::Ptr GlimMapLoader::load(const MapLoadOptions& options) const {
 
   std::vector<glim::SubMap::Ptr> submaps;
   submaps.reserve(std::max(0, check.num_submaps));
+  int skipped_submaps = 0;
 
   spdlog::info("loading {} GLIM submaps from {}", check.num_submaps, options.map_path);
   for (int i = 0; i < check.num_submaps; i++) {
@@ -43,6 +44,7 @@ LocalizationMap::Ptr GlimMapLoader::load(const MapLoadOptions& options) const {
       if (options.strict) {
         return nullptr;
       }
+      skipped_submaps++;
       continue;
     }
 
@@ -61,7 +63,40 @@ LocalizationMap::Ptr GlimMapLoader::load(const MapLoadOptions& options) const {
   }
 
   auto map = std::make_shared<LocalizationMap>(submaps);
-  spdlog::info("loaded localization map: {} submaps", map->size());
+  LocalizationMapMetadata metadata;
+  metadata.map_path = options.map_path;
+  metadata.detected_format = check.detected_format;
+  metadata.compatibility = check.compatibility;
+  metadata.strict = options.strict;
+  metadata.load_voxelmaps = options.load_voxelmaps;
+  metadata.load_raw_frames = options.load_raw_frames;
+  metadata.requested_submaps = check.num_submaps;
+  metadata.loaded_submaps = static_cast<int>(submaps.size());
+  metadata.skipped_submaps = skipped_submaps;
+  metadata.has_graph_txt = check.has_graph_txt;
+  metadata.has_graph_bin = check.has_graph_bin;
+  metadata.has_values_bin = check.has_values_bin;
+  map->set_metadata(metadata);
+
+  const auto stats = map->stats();
+  spdlog::info(
+    "loaded localization map: format={} compatibility={} loaded={}/{} skipped={} points={}",
+    metadata.detected_format,
+    metadata.compatibility,
+    metadata.loaded_submaps,
+    metadata.requested_submaps,
+    metadata.skipped_submaps,
+    stats.num_points);
+  if (stats.has_bounds) {
+    spdlog::info(
+      "localization map bounds: origin_min=({:.3f}, {:.3f}, {:.3f}) origin_max=({:.3f}, {:.3f}, {:.3f})",
+      stats.origin_min.x(),
+      stats.origin_min.y(),
+      stats.origin_min.z(),
+      stats.origin_max.x(),
+      stats.origin_max.y(),
+      stats.origin_max.z());
+  }
   return map;
 }
 

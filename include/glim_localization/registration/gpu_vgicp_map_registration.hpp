@@ -27,10 +27,8 @@ public:
 
 private:
   std::shared_ptr<gtsam_points::PointCloudCPU> build_target_cloud_cpu(const LocalTargetMap::ConstPtr& target) const;
-  void evaluate_result(RegistrationResult& result, const Eigen::Isometry3d& initial_T_map_imu) const;
 
 private:
-  MatchingOptions options_;
   std::unique_ptr<gtsam_points::CUDAStream> stream_;
   std::unique_ptr<gtsam_points::StreamTempBufferRoundRobin> stream_buffer_roundrobin_;
 };

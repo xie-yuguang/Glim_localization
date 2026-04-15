@@ -30,6 +30,7 @@ if(DEFINED ENV{ROS_VERSION})
     find_package(rclcpp REQUIRED)
     find_package(std_msgs REQUIRED)
     find_package(std_srvs REQUIRED)
+    find_package(diagnostic_msgs REQUIRED)
     find_package(nav_msgs REQUIRED)
     find_package(sensor_msgs REQUIRED)
     find_package(geometry_msgs REQUIRED)
@@ -50,6 +51,7 @@ add_library(glim_localization SHARED
   src/glim_localization/map_loader/map_format_checker.cpp
   src/glim_localization/map_loader/glim_map_loader.cpp
   src/glim_localization/output/trajectory_writer.cpp
+  src/glim_localization/registration/map_registration_base.cpp
   src/glim_localization/registration/cpu_gicp_map_registration.cpp
   src/glim_localization/relocalization/geometric_verifier.cpp
   src/glim_localization/relocalization/runtime_relocalization_request.cpp
@@ -96,6 +98,7 @@ if(DEFINED ENV{ROS_VERSION})
       rclcpp
       std_msgs
       std_srvs
+      diagnostic_msgs
       nav_msgs
       sensor_msgs
       geometry_msgs
@@ -129,6 +132,7 @@ install(DIRECTORY config DESTINATION ${CMAKE_INSTALL_DATADIR})
 install(DIRECTORY rviz DESTINATION ${CMAKE_INSTALL_DATADIR})
 install(PROGRAMS
   tools/run_offline_localization.sh
+  tools/run_standard_experiment.sh
   tools/plot_trajectory.py
   tools/monitor/run_with_time.sh
   tools/monitor/monitor_ps.sh
@@ -222,6 +226,34 @@ if(BUILD_TESTING)
     glim_localization
   )
   add_test(NAME test_scan_context_relocalizer COMMAND test_scan_context_relocalizer)
+
+  add_executable(test_geometric_verifier
+    tests/test_geometric_verifier.cpp
+  )
+  target_link_libraries(test_geometric_verifier
+    glim_localization
+  )
+  add_test(NAME test_geometric_verifier COMMAND test_geometric_verifier)
+
+  add_executable(test_localization_contracts
+    tests/test_localization_contracts.cpp
+  )
+  target_link_libraries(test_localization_contracts
+    glim_localization
+  )
+  add_test(NAME test_localization_contracts COMMAND test_localization_contracts)
+
+  add_executable(test_trajectory_writer
+    tests/test_trajectory_writer.cpp
+  )
+  target_link_libraries(test_trajectory_writer
+    glim_localization
+  )
+  add_test(NAME test_trajectory_writer COMMAND test_trajectory_writer)
+
+  add_test(NAME test_run_offline_localization_syntax COMMAND bash -n ${CMAKE_CURRENT_SOURCE_DIR}/tools/run_offline_localization.sh)
+  add_test(NAME test_run_offline_localization_runtime COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_run_offline_localization_runtime.sh)
+  add_test(NAME test_run_standard_experiment_syntax COMMAND bash -n ${CMAKE_CURRENT_SOURCE_DIR}/tools/run_standard_experiment.sh)
 
   add_executable(test_plugin_module_loading
     tests/test_plugin_module_loading.cpp

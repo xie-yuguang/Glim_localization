@@ -12,6 +12,8 @@ struct RegistrationResult {
 
   bool converged = false;
   bool accepted = false;
+  std::string backend_name = "unknown";
+  std::string score_type = "normalized_acceptance_score";
   double score = 0.0;
   double residual = 0.0;
   double pose_delta_translation = 0.0;

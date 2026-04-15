@@ -17,6 +17,18 @@
 - “是否必填”表示代码是否没有默认值就无法正常运行。很多参数代码有默认值，但为了 localization-only 正常工作，仍建议显式配置。
 - 如果你的旧配置里还保留顶层 `enable_local_mapping`、`enable_global_mapping`，当前 localization 代码不会读取它们；真正被 `glim_ros2` 读取的是 `glim_ros.enable_local_mapping` 和 `glim_ros.enable_global_mapping`。
 
+本文职责边界：
+
+- 负责：当前真实代码已解析参数的权威参考
+- 不负责：完整部署教程、最短闭环步骤、FAQ 式排障
+
+对应文档：
+
+- 基线与契约：`docs/baseline_and_contract.md`
+- 最小闭环：`docs/quick_start.md`
+- 完整部署：`docs/deployment_and_run.md`
+- 常见问题：`docs/faq.md`
+
 ## 1. odometry_estimation
 
 这些参数位于 `odometry_estimation` 节点。`so_name` 由 `glim_ros2` 读取并用于加载 odometry 动态库；其余参数由 GLIM 的 `OdometryEstimationIMUParams` 基类读取。`OdometryEstimationLocalizationCPUParams` 会在检测到 localization 初始位姿后覆盖一部分初始化行为。
@@ -60,6 +72,16 @@
 - `frame->T_world_lidar == T_map_lidar`
 - `T_map_odom` 当前默认为 identity，并为后续 reset/relocalization 策略预留。
 
+P1 起，`glim_localization_map_info` 和运行时地图加载日志会额外输出：
+
+- `detected_format`
+- `compatibility`
+- `loaded/requested/skipped submaps`
+- `merged_submap_points`
+- 地图 origin bounds
+
+这部分信息用于基础兼容性检查和地图健康诊断，不代表已经引入完整的地图版本迁移机制。
+
 ## 3. initial_pose
 
 这些参数位于 `localization.initial_pose`。由 `LocalizationOptions::load()` 读取，再由 `ConfigInitialPoseProvider` 和 `OdometryEstimationLocalizationCPU` 使用。
@@ -75,6 +97,7 @@
 - `source == "config"` 时，`ConfigInitialPoseProvider::ready()` 返回 true。
 - `source == "topic"` 时，模块会等待 runtime initial pose。topic 名来自 `localization.ros.initial_pose_topic`。
 - 其他字符串当前不会被特殊处理，会导致 config provider 不 ready；如果也不是 `topic`，模块会持续等待初始位姿。
+- P1 起，config / runtime 两种初始位姿在进入 `INITIALIZING` 前都会做一次附近 submap 诊断，并输出候选 submap 数量、最近距离和候选 ID。
 
 ## 4. target_map
 
@@ -89,6 +112,14 @@
 | `localization.target_map.use_submap_index` | bool | `true` | 否 | 是否构建并使用 `SubmapIndex`。 | 大多数场景保持 `true` | 大地图下可加速 nearby query；关闭后使用线性搜索。 |
 | `localization.target_map.index_resolution` | double | `20.0` | 否 | submap index 栅格分辨率，单位米。 | 接近 submap 间距或查询半径的一半，默认 `20.0` | 太小 cell 多、索引开销变大；太大退化为大 cell 查询。 |
 
+P1 起，target map 运行日志会区分三类行为：
+
+- `reusing localization target map`
+- `recentered localization target map`
+- `rebuilt localization target map`
+
+其中 `recentered` 表示本帧已经越过更新阈值，但新查询到的 active submap 集合与当前集合一致，此时只更新 target center，不重新替换 target map 对象。
+
 ## 5. matching
 
 这些参数位于 `localization.matching`，用于 CPU GICP / 可选 GPU VGICP scan-to-map registration，以及 registration result gating。
@@ -97,7 +128,7 @@
 |---|---:|---|---|---|---|---|
 | `localization.matching.method` | string | `cpu_gicp` | 否 | registration 后端选择。当前识别 `cpu_gicp` 和 `gpu_vgicp`。 | 默认 `cpu_gicp` | `gpu_vgicp` 仅在构建时启用 CUDA 且 gtsam_points 支持 CUDA 时可用，否则回退 CPU。 |
 | `localization.matching.max_iterations` | int | `20` | 否 | registration 优化最大迭代次数。 | `10-30` | 过小可能不收敛；过大增加耗时。 |
-| `localization.matching.min_score` | double | `0.35` | 否 | 接受匹配的最低 score。CPU GICP 使用 inlier fraction。 | `0.3-0.6` | 过高容易拒绝，过低可能接受错误匹配。 |
+| `localization.matching.min_score` | double | `0.35` | 否 | 接受匹配的最低 normalized acceptance score。CPU GICP 当前使用 inlier fraction，GPU VGICP 当前使用 residual 派生的置信度分数。 | `0.3-0.6` | 过高容易拒绝，过低可能接受错误匹配。 |
 | `localization.matching.min_inliers` | int | `30` | 否 | 接受匹配的最低 inlier 数。 | 根据点云密度设置，默认 `30` | 点云很稀疏时可适当降低。 |
 | `localization.matching.max_residual` | double | `1000000.0` | 否 | 接受匹配的最大 residual。`<=0` 时相当于不启用上限检查。 | 初期可保持默认 | 过小会导致大量 `high_residual` rejection。 |
 | `localization.matching.max_pose_correction_translation` | double | `3.0` | 否 | 单次 registration 允许的最大平移修正，单位米。 | `1.0-5.0` | 初值不准时太小会拒绝；太大可能接受跳变。 |
@@ -119,6 +150,15 @@ registration 接受条件来自当前代码：
 - pose correction translation 不超过 `max_pose_correction_translation`
 - pose correction angle 不超过 `max_pose_correction_angle`
 
+P1 起，CPU / GPU backend 共用同一套 gating 顺序和 reject reason 命名：
+
+- `not_converged`
+- `high_residual`
+- `low_score`
+- `few_inliers`
+- `large_translation_correction`
+- `large_rotation_correction`
+
 ## 6. ros output
 
 这些参数位于 `localization.ros`，由 `LocalizationOptions::load()` 读取，并由 `modules/extension/localization_publisher/localization_publisher.cpp` 使用。注意：这些输出只有在 `glim_ros.extension_modules` 包含 `liblocalization_publisher.so` 且该库成功加载时才生效。
@@ -127,9 +167,11 @@ registration 接受条件来自当前代码：
 |---|---:|---|---|---|---|---|
 | `localization.ros.publish_tf` | bool | `true` | 否 | 是否发布 TF。 | 在线调试保持 `true` | 发布 `map -> odom` 和 `odom -> base_link`。 |
 | `localization.ros.publish_debug_target_map` | bool | `true` | 否 | 是否发布 debug target map 点云。 | 调试时 `true`，性能敏感时可设 `false` | 为 true 且 topic 有订阅者时，会合并 active submap 点云并发布，可能增加计算量。 |
+| `localization.ros.publish_diagnostics` | bool | `true` | 否 | 是否发布结构化 diagnostics。 | `true` | 发布 `diagnostic_msgs/msg/DiagnosticArray`，便于观察失锁、恢复、重定位和 continuity 调整。 |
 | `localization.ros.initial_pose_topic` | string | `/initialpose` | 否 | runtime 初始位姿订阅 topic。 | `/initialpose` | 当 `initial_pose.source == "topic"` 时，模块等待该 topic。 |
 | `localization.ros.relocalization_service` | string | `/localization/relocalize` | 否 | 手动触发重定位服务名。 | `/localization/relocalize` | service callback 会设置 runtime relocalization request。 |
 | `localization.ros.status_topic` | string | `/localization/status` | 否 | localization 状态输出 topic。 | `/localization/status` | 发布 `std_msgs/msg/String`，内容为状态名和 score。 |
+| `localization.ros.diagnostic_topic` | string | `/localization/diagnostics` | 否 | 结构化 diagnostics 输出 topic。 | `/localization/diagnostics` | 发布状态原因、reject reason、恢复计数、候选数和 continuity 信息。 |
 | `localization.ros.odom_topic` | string | `/localization/odom` | 否 | odometry 输出 topic。 | `/localization/odom` | 发布 `nav_msgs/msg/Odometry`，frame 为 `odom_frame`，child 为 `base_frame`。 |
 | `localization.ros.pose_topic` | string | `/localization/pose` | 否 | pose 输出 topic。 | `/localization/pose` | 发布 `geometry_msgs/msg/PoseStamped`，frame 为 `map_frame`。 |
 | `localization.ros.trajectory_topic` | string | `/localization/trajectory` | 否 | 轨迹可视化 topic。 | `/localization/trajectory` | 发布 `nav_msgs/msg/Path`，内容为当前累计 `T_map_imu` 轨迹。 |
@@ -180,6 +222,11 @@ registration 接受条件来自当前代码：
 | `localization.relocalization.min_radius` | double | `1.0` | 否 | 描述子使用点的最小半径。 | `1.0` | 过滤近距离点，影响描述子稳定性。 |
 | `localization.relocalization.max_radius` | double | `80.0` | 否 | 描述子使用点的最大半径。 | 与雷达有效范围一致，如 `60-100` | 太小会丢失全局结构；太大可能加入噪声/稀疏远点。 |
 | `localization.relocalization.max_descriptor_distance` | double | `0.35` | 否 | 候选描述子最大距离。 | `0.3-0.5` | 越小候选越严格；越大候选更多但误检增加。 |
+| `localization.relocalization.candidate_translation_weight` | double | `0.01` | 否 | 候选重排时，对候选初值与当前预测位姿之间平移差的软惩罚权重。 | `0.0-0.05` | 值越大，越偏向当前预测附近的候选。 |
+| `localization.relocalization.max_candidate_translation_delta` | double | `80.0` | 否 | 候选过滤允许的最大平移差，单位米。`<=0` 时可视为关闭该过滤。 | `40-120` | 值太小会漏掉远距离重定位候选。 |
+| `localization.relocalization.verification_target_max_submaps` | int | `4` | 否 | 几何验证阶段允许构建的局部 target map 最大 submap 数。 | `2-6` | 值越大，验证更稳，但耗时更高。 |
+| `localization.relocalization.verification_target_max_distance` | double | `20.0` | 否 | 几何验证阶段局部 target map 的查询半径，单位米。 | `10-30` | 太小可能 target 不足；太大则验证变慢。 |
+| `localization.relocalization.recovery_stable_frames` | int | `2` | 否 | relocalization 成功后，需要再连续接受多少帧 scan-to-map 才从 `RECOVERING` 切回 `TRACKING`。 | `1-5` | 值越大，恢复判定越保守。 |
 
 ## 10. debug
 

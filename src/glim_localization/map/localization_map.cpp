@@ -31,6 +31,7 @@ std::size_t LocalizationMap::size() const {
 
 void LocalizationMap::clear() {
   submaps_.clear();
+  metadata_ = LocalizationMapMetadata();
   clear_index();
 }
 
@@ -46,6 +47,10 @@ void LocalizationMap::set_submaps(const std::vector<glim::SubMap::Ptr>& submaps)
 void LocalizationMap::set_submaps(const std::vector<SubMapConstPtr>& submaps) {
   clear_index();
   submaps_ = submaps;
+}
+
+void LocalizationMap::set_metadata(const LocalizationMapMetadata& metadata) {
+  metadata_ = metadata;
 }
 
 const std::vector<LocalizationMap::SubMapConstPtr>& LocalizationMap::submaps() const {
@@ -66,6 +71,37 @@ std::vector<int> LocalizationMap::submap_ids() const {
   }
 
   return ids;
+}
+
+const LocalizationMapMetadata& LocalizationMap::metadata() const {
+  return metadata_;
+}
+
+LocalizationMapStats LocalizationMap::stats() const {
+  LocalizationMapStats result;
+  result.num_submaps = submaps_.size();
+
+  for (const auto& submap : submaps_) {
+    if (!submap) {
+      continue;
+    }
+
+    const Eigen::Vector3d origin = submap->T_world_origin.translation();
+    if (!result.has_bounds) {
+      result.origin_min = origin;
+      result.origin_max = origin;
+      result.has_bounds = true;
+    } else {
+      result.origin_min = result.origin_min.cwiseMin(origin);
+      result.origin_max = result.origin_max.cwiseMax(origin);
+    }
+
+    if (submap->frame) {
+      result.num_points += static_cast<std::size_t>(submap->frame->size());
+    }
+  }
+
+  return result;
 }
 
 void LocalizationMap::build_index(double resolution) {

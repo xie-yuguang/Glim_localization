@@ -68,14 +68,21 @@
       "num_sectors": 60,
       "min_radius": 1.0,
       "max_radius": 80.0,
-      "max_descriptor_distance": 0.35
+      "max_descriptor_distance": 0.35,
+      "candidate_translation_weight": 0.01,
+      "max_candidate_translation_delta": 80.0,
+      "verification_target_max_submaps": 4,
+      "verification_target_max_distance": 20.0,
+      "recovery_stable_frames": 2
     },
     "ros": {
       "publish_tf": true,
       "publish_debug_target_map": true,
+      "publish_diagnostics": true,
       "initial_pose_topic": "/initialpose",
       "relocalization_service": "/localization/relocalize",
       "status_topic": "/localization/status",
+      "diagnostic_topic": "/localization/diagnostics",
       "odom_topic": "/localization/odom",
       "pose_topic": "/localization/pose",
       "trajectory_topic": "/localization/trajectory",

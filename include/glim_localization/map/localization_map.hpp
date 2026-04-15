@@ -3,14 +3,40 @@
 #include <cstddef>
 #include <memory>
 #include <vector>
+#include <limits>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
 #include <glim/mapping/sub_map.hpp>
 #include <glim_localization/map/local_target_map.hpp>
+#include <glim_localization/map_loader/map_load_options.hpp>
+#include <glim_localization/map_loader/map_format_checker.hpp>
 #include <glim_localization/map/submap_index.hpp>
 
 namespace glim_localization {
+
+struct LocalizationMapMetadata {
+  std::string map_path;
+  std::string detected_format = "unknown";
+  std::string compatibility = "unsupported";
+  bool strict = true;
+  bool load_voxelmaps = true;
+  bool load_raw_frames = false;
+  int requested_submaps = 0;
+  int loaded_submaps = 0;
+  int skipped_submaps = 0;
+  bool has_graph_txt = false;
+  bool has_graph_bin = false;
+  bool has_values_bin = false;
+};
+
+struct LocalizationMapStats {
+  std::size_t num_submaps = 0;
+  std::size_t num_points = 0;
+  bool has_bounds = false;
+  Eigen::Vector3d origin_min = Eigen::Vector3d::Constant(std::numeric_limits<double>::max());
+  Eigen::Vector3d origin_max = Eigen::Vector3d::Constant(-std::numeric_limits<double>::max());
+};
 
 class LocalizationMap {
 public:
@@ -30,9 +56,12 @@ public:
   void clear();
   void set_submaps(const std::vector<glim::SubMap::Ptr>& submaps);
   void set_submaps(const std::vector<SubMapConstPtr>& submaps);
+  void set_metadata(const LocalizationMapMetadata& metadata);
   const std::vector<SubMapConstPtr>& submaps() const;
   SubMapConstPtr at(std::size_t i) const;
   std::vector<int> submap_ids() const;
+  const LocalizationMapMetadata& metadata() const;
+  LocalizationMapStats stats() const;
 
   void build_index(double resolution);
   void clear_index();
@@ -46,6 +75,7 @@ public:
 private:
   std::vector<SubMapConstPtr> submaps_;
   SubmapIndex::Ptr index_;
+  LocalizationMapMetadata metadata_;
 };
 
 }  // namespace glim_localization

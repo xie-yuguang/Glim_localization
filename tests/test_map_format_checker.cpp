@@ -47,12 +47,16 @@ int main() {
   const auto invalid = checker.check(invalid_dir.string());
   expect(!invalid.valid, "invalid graph.txt must be invalid");
   expect(!invalid.errors.empty(), "invalid graph.txt must report an error");
+  expect(invalid.detected_format == "unknown", "invalid graph.txt must keep unknown format");
+  expect(invalid.compatibility == "unsupported", "invalid graph.txt must keep unsupported compatibility");
 
   const fs::path incomplete_dir = make_temp_dir("glim_localization_incomplete_map");
   write_graph_txt(incomplete_dir, 1);
   const auto incomplete = checker.check(incomplete_dir.string());
   expect(!incomplete.valid, "map with missing submap directory must be invalid");
   expect(!incomplete.errors.empty(), "missing submap must report an error");
+  expect(incomplete.missing_submap_directories == 1, "missing submap directory count mismatch");
+  expect(incomplete.missing_submap_data_files == 0, "missing data file count must stay zero when directory is absent");
 
   const fs::path valid_empty_dir = make_temp_dir("glim_localization_valid_empty_map");
   write_graph_txt(valid_empty_dir, 0);
@@ -60,6 +64,8 @@ int main() {
   expect(valid_empty.valid, "empty but well-formed map must be valid");
   expect(valid_empty.num_submaps == 0, "empty map must report zero submaps");
   expect(valid_empty.has_graph_txt, "valid map must report graph.txt");
+  expect(valid_empty.detected_format == "glim_dump", "valid map must detect glim_dump format");
+  expect(valid_empty.compatibility == "supported", "valid map must report supported compatibility");
 
   fs::remove_all(invalid_dir);
   fs::remove_all(incomplete_dir);

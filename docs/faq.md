@@ -1,5 +1,16 @@
 # FAQ
 
+本文职责边界：
+
+- 负责：回答高频问题，给出最短检查路径
+- 不负责：重复展开完整教程或配置全表
+
+建议使用顺序：
+
+1. 先看 `docs/baseline_and_contract.md` 确认当前基线与接口契约。
+2. 再看 `docs/quick_start.md` 或 `docs/deployment_and_run.md` 对照操作步骤。
+3. 最后用本文快速定位高频问题。
+
 ## Q1：为什么 RViz 里看不到 `/localization/debug/local_target_map`？
 
 `localization_publisher` 只有在同时满足下面两个条件时才会发布这个 topic：

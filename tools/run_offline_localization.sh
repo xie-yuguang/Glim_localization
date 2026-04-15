@@ -60,6 +60,7 @@ cp -r "${CONFIG_TEMPLATE_DIR}/." "${WORK_DIR}/"
 
 python3 - "$WORK_DIR/localization.json" "$MAP_PATH" "$TRAJ_PATH" "$INIT_X" "$INIT_Y" "$INIT_Z" "$INIT_ROLL" "$INIT_PITCH" "$INIT_YAW" <<'PY'
 import json
+import os
 import sys
 
 config_path, map_path, traj_path = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -81,6 +82,10 @@ initial_pose = localization.setdefault("initial_pose", {})
 initial_pose["source"] = "config"
 initial_pose["xyz"] = xyz
 initial_pose["rpy"] = rpy
+
+matching_method = os.environ.get("GLIM_LOCALIZATION_MATCHING_METHOD", "").strip()
+if matching_method:
+    localization.setdefault("matching", {})["method"] = matching_method
 
 with open(config_path, "w", encoding="utf-8") as f:
     json.dump(config, f, indent=2)

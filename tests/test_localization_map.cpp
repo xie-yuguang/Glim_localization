@@ -2,6 +2,8 @@
 #include <iostream>
 #include <vector>
 
+#include <gtsam_points/types/point_cloud_cpu.hpp>
+
 #include <glim_localization/map/localization_map.hpp>
 
 namespace {
@@ -18,6 +20,10 @@ glim::SubMap::Ptr make_submap(int id, double x, double y = 0.0, double z = 0.0) 
   submap->id = id;
   submap->T_world_origin.setIdentity();
   submap->T_world_origin.translation() = Eigen::Vector3d(x, y, z);
+  submap->frame = std::make_shared<gtsam_points::PointCloudCPU>(std::vector<Eigen::Vector4d>{
+    Eigen::Vector4d(x, y, z, 1.0),
+    Eigen::Vector4d(x + 0.1, y, z, 1.0),
+  });
   return submap;
 }
 
@@ -39,6 +45,24 @@ int main() {
   glim_localization::LocalizationMap map(submaps);
   expect(!map.empty(), "map must not be empty");
   expect(map.size() == 4, "map size must match input submap count");
+
+  glim_localization::LocalizationMapMetadata metadata;
+  metadata.map_path = "/tmp/example_map";
+  metadata.detected_format = "glim_dump";
+  metadata.compatibility = "supported";
+  metadata.requested_submaps = 4;
+  metadata.loaded_submaps = 4;
+  metadata.skipped_submaps = 0;
+  map.set_metadata(metadata);
+  expect(map.metadata().map_path == "/tmp/example_map", "map metadata path mismatch");
+  expect(map.metadata().compatibility == "supported", "map metadata compatibility mismatch");
+
+  const auto stats = map.stats();
+  expect(stats.num_submaps == 4, "map stats submap count mismatch");
+  expect(stats.num_points == 8, "map stats point count mismatch");
+  expect(stats.has_bounds, "map stats must report valid bounds");
+  expect((stats.origin_min - Eigen::Vector3d(-5.0, 0.0, 0.0)).norm() < 1e-9, "map stats min bound mismatch");
+  expect((stats.origin_max - Eigen::Vector3d(20.0, 0.0, 0.0)).norm() < 1e-9, "map stats max bound mismatch");
 
   const auto ids = map.submap_ids();
   expect((ids == std::vector<int>{10, 20, 30, 40}), "global map ids must preserve inserted order");
@@ -66,7 +90,7 @@ int main() {
   expect((target->active_submap_ids() == std::vector<int>{10, 40}), "active submap ids mismatch");
   expect((target->submap_ids() == std::vector<int>{10, 40}), "submap_ids alias mismatch");
   expect((target->target_center() - Eigen::Vector3d(1.0, 0.0, 0.0)).norm() < 1e-9, "target center mismatch");
-  expect(target->target_frames().empty(), "manually constructed test submaps have no target frames");
+  expect(target->target_frames().size() == 2, "target frames must reflect active submaps");
   expect(!target->needs_update(make_pose(1.5), 2.0, 0.2), "target map must be reusable inside update thresholds");
   expect(target->needs_update(make_pose(3.1), 2.0, 0.2), "target map must update after translation threshold");
 

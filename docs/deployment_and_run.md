@@ -19,6 +19,21 @@
 - 第三方库安装方式会随系统、ROS2 发行版、CUDA 环境变化。无法从仓库完全确定的安装命令均标注为“示例命令，需按本机环境调整”。
 - 当前 `glim_localization` 没有独立 `glim_localization_ros` 包，在线/离线运行入口来自 `glim_ros2` 包，ROS2 包名是 `glim_ros`。
 
+本文职责边界：
+
+- 负责：从环境准备到离线/在线运行、验证和排障的完整操作路径
+- 不负责：参数逐项解释、FAQ 式快速问答、资源监测细节
+
+对应文档：
+
+- 基线与契约：`docs/baseline_and_contract.md`
+- ROS 接口：`docs/ros_interface.md`
+- 最小闭环：`docs/quick_start.md`
+- 参数参考：`docs/config_reference.md`
+- 常见问题：`docs/faq.md`
+- 资源监测：`docs/resource_monitoring.md`
+- 工程化与回归：`docs/engineering_playbook.md`
+
 ## 1. 系统要求
 
 推荐环境：
@@ -244,6 +259,23 @@ colcon build --symlink-install --packages-up-to glim_ros glim_localization
 ```bash
 colcon build --symlink-install --packages-select glim_localization
 ```
+
+## 5. 使用矩阵
+
+建议长期维护时至少明确这四种组合：
+
+| 模式 | 入口 | 匹配后端 | 主要用途 |
+|---|---|---|---|
+| `offline_cpu` | `glim_rosbag` | `cpu_gicp` | 最小闭环、CPU-only 回归 |
+| `offline_gpu` | `glim_rosbag` | `gpu_vgicp` | GPU 性能与资源对照 |
+| `online_cpu` | `glim_rosnode` | `cpu_gicp` | 在线接口与 TF 行为验证 |
+| `online_gpu` | `glim_rosnode` | `gpu_vgicp` | 在线 GPU 路径验证 |
+
+其中：
+
+- 标准基线优先 `offline_cpu`
+- 影响 GPU 或 warning/hook 行为时补跑 `offline_gpu`
+- 改 topic / TF / diagnostics 时补跑在线链路
 
 ### 4.4 编译 GPU registration
 

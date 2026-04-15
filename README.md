@@ -13,6 +13,33 @@
 
 `glim_localization` 是一个基于 GLIM 的 localization-only 运行模块。它的目标不是在线构建新地图，而是在已有 GLIM dump 地图上进行实时或离线定位。
 
+### 1.1 文档职责与 P0 收束入口
+
+P0 阶段，`glim_localization` 的标准实验基线、接口语义、状态语义和最小回归口径统一收束在：
+
+- `docs/baseline_and_contract.md`
+
+文档职责分工如下：
+
+- `README.md`
+  - 项目全景、模块边界、目录入口
+- `docs/quick_start.md`
+  - 第一次跑通离线最小闭环
+- `docs/deployment_and_run.md`
+  - 完整部署、离线/在线运行与排障
+- `docs/config_reference.md`
+  - 当前代码真实解析的配置项
+- `docs/ros_interface.md`
+  - topic / TF / diagnostics / frame 契约
+- `docs/engineering_playbook.md`
+  - 标准实验链路、使用矩阵、长期回归和维护边界
+- `docs/faq.md`
+  - 高频问题快速答案
+- `docs/resource_monitoring.md`
+  - 第三方资源监测、图表与 HTML 报告
+
+如果你需要确认“当前官方基线是什么、topic/frame/status/trajectory 契约是什么、后续优化怎么判断没有漂移”，优先看 `docs/baseline_and_contract.md`，不要只从多个教程文档中拼接理解。
+
 它解决的问题：
 
 - 从已有 GLIM 地图 dump 加载 submap。
@@ -111,6 +138,7 @@ glim_localization/
   - `glim_localization_map_info.cpp`：地图格式检查和地图信息打印工具。
   - `benchmark_localization.cpp`：nearby query / index 简单 benchmark。
   - `run_offline_localization.sh`：离线 rosbag localization 辅助脚本。
+  - `run_standard_experiment.sh`：标准离线实验总控脚本，统一 trajectory、benchmark、monitor、HTML 报告。
 - `tests/`
   - 单元测试与小型功能验证入口。
 
@@ -398,6 +426,7 @@ ls install/glim_localization/lib/glim_localization/benchmark_localization
 
 - GLIM dump 地图目录。
 - 不能为空，否则 odometry module 会打印 `localization.map_path is empty; localization map is not loaded` 并进入 `WAIT_MAP`。
+- P1 起，地图加载日志和 `glim_localization_map_info` 会额外给出 `detected_format`、`compatibility`、`loaded/requested/skipped submaps`、point 数量和 origin bounds，作为基础健康检查输出。
 
 `localization.trajectory_path`：
 
@@ -410,6 +439,7 @@ ls install/glim_localization/lib/glim_localization/benchmark_localization
 - `source = "topic"`：启动后等待 `localization.ros.initial_pose_topic`，默认 `/initialpose`。
 - `xyz` 单位为米。
 - `rpy` 单位为弧度，按 roll、pitch、yaw 设置。
+- P1 起，config / runtime 两类初始位姿都会先做一次附近 submap 诊断，再进入 `INITIALIZING`。
 
 `localization.target_map`：
 
@@ -419,12 +449,13 @@ ls install/glim_localization/lib/glim_localization/benchmark_localization
 - `update_angle`：旋转超过该阈值才重建 target map。
 - `use_submap_index`：是否构建 submap 空间索引。
 - `index_resolution`：索引栅格分辨率。
+- P1 起，运行日志会区分 `reusing`、`recentered` 和 `rebuilt` 三种 target map 行为，便于解释 target map 复用策略。
 
 `localization.matching`：
 
 - `method`：`cpu_gicp` 或 `gpu_vgicp`。`gpu_vgicp` 需要编译时启用 CUDA，否则回退 CPU。
 - `max_iterations`：registration 优化迭代次数。
-- `min_score`：匹配接受的最低 score。
+- `min_score`：匹配接受的最低 normalized acceptance score。CPU 当前基于 inlier fraction，GPU 当前基于 residual 派生的置信度分数，但两条路径共用同一套 gating 和 reject reason。
 - `min_inliers`：匹配接受的最低 inlier 数。
 - `max_residual`：最大 residual。
 - `max_pose_correction_translation`：最大平移修正量。
@@ -434,6 +465,18 @@ ls install/glim_localization/lib/glim_localization/benchmark_localization
 - `pose_prior_precision`：将匹配结果加入 smoother 的 prior / between factor precision。
 - `num_threads`：CPU registration 线程数。
 - `vgicp_*`：GPU VGICP 使用的参数。
+
+`localization.relocalization`：
+
+- P2 起支持候选重排、候选平移差过滤、局部 target map 验证和恢复稳定期。
+- `candidate_translation_weight` 与 `max_candidate_translation_delta` 用于控制候选排序与过滤。
+- `verification_target_*` 用于控制几何验证时的局部 target map 范围。
+- `recovery_stable_frames` 用于控制 relocalization 成功后多久从 `RECOVERING` 回到 `TRACKING`。
+
+`localization.ros`：
+
+- `status_topic` 继续保留兼容性的字符串状态输出。
+- P2 新增 `diagnostic_topic`，默认 `/localization/diagnostics`，发布结构化 diagnostics，便于观察 `DEGRADED / RELOCALIZING / RECOVERING`、reject reason、候选数和 continuity 调整。
 
 `localization.relocalization`：
 
@@ -1097,6 +1140,14 @@ GLIM_LOCALIZATION_TEST_MAP=/data/maps/glim_dump colcon test --packages-select gl
   - 使用小型 scan + target map 验证 CPU GICP 匹配输出。
 - `test_scan_context_relocalizer`
   - 验证 ScanContext 风格 relocalizer 基础查询。
+- `test_localization_contracts`
+  - 固化默认 frame/topic/status 名称契约。
+- `test_trajectory_writer`
+  - 固化 trajectory 文件列格式契约。
+
+P0 最小测试集、CPU-only / GPU-enabled 回归口径和验收标准见：
+
+- `docs/baseline_and_contract.md`
 
 ### 10.2 最小闭环验证
 
@@ -1253,6 +1304,43 @@ python3 Glim_localization/tools/monitor/generate_usage_report.py \
 - `resource_report.html`
 
 如果日志目录里没有 GPU 数据，工具会自动降级为 CPU-only 报告。
+
+### 10.6 标准实验链路
+
+P3 起，推荐把离线实验统一收成一条固定流程：
+
+- 离线 localization
+- trajectory 输出与绘图
+- benchmark
+- 外部资源监测
+- HTML 资源报告
+- 实验记录模板
+
+标准入口：
+
+```bash
+bash tools/run_standard_experiment.sh \
+  --bag /path/to/bag \
+  --map /path/to/map \
+  --initial-pose "0 0 0 0 0 0" \
+  --output-dir /tmp/glim_exp_cpu \
+  --matching-method cpu_gicp \
+  --enhanced
+```
+
+这个脚本会统一生成：
+
+- `experiment_manifest.txt`
+- `experiment_record.md`
+- `monitor/`
+- `resource_report/`
+- `trajectory/`
+- `benchmark/`
+
+完整工程化说明见：
+
+- `docs/engineering_playbook.md`
+- `docs/ros_interface.md`
 
 ## 11. 调试建议
 
@@ -1463,17 +1551,30 @@ ros2 run glim_localization glim_localization_map_info <map_path>
   - CPU registration
   - scan context relocalizer
 
-### 13.2 当前未实现或待补充
+### 13.2 当前部分实现 / 未实现 / 待补充
 
 - 独立 `glim_localization_ros` 包。
 - ROS2 launch 文件。
-- RViz 配置。
+- 产品级 `map->odom` 连续维护策略。
+- 产品级 relocalization 恢复后连续性管理。
 - 产品级重定位状态管理和 smoother reset 策略。
 - 完整 covariance 输出。
 - 多地图格式支持，例如 PCD/PLY/自定义语义地图直接导入。
 - 完整 GPU 性能验证报告。
 - `base_link` 与 IMU pose 语义的进一步解耦。
-- `map->odom` 的连续维护策略。
+- 面向团队共享的标准 bag / map 基线资产本体。
+
+当前已经存在但仍属于“部分实现 / MVP / 后续要补强”的能力包括：
+
+- 基础 relocalization：
+  - 已实现 ScanContext 风格候选检索 + 几何验证
+  - 但还没有复杂多假设管理和完整 smoother reset 策略
+- `map->odom`：
+  - 已发布标准 TF 链路
+  - 但当前基本保持 identity，主要用于兼容，不代表已完成连续性管理
+- GPU matching：
+  - 已支持可选 `gpu_vgicp`
+  - 但 GPU 路径的长期性能基线和更完整的回归体系仍待补足
 
 ### 13.3 后续计划建议
 

@@ -28,12 +28,16 @@ const char* to_string(LocalizationStatus status) {
       return "WAIT_INITIAL_POSE";
     case LocalizationStatus::INITIALIZING:
       return "INITIALIZING";
+    case LocalizationStatus::DEGRADED:
+      return "DEGRADED";
     case LocalizationStatus::TRACKING:
       return "TRACKING";
     case LocalizationStatus::LOST:
       return "LOST";
     case LocalizationStatus::RELOCALIZING:
       return "RELOCALIZING";
+    case LocalizationStatus::RECOVERING:
+      return "RECOVERING";
   }
 
   return "UNKNOWN";
@@ -104,13 +108,25 @@ LocalizationOptions LocalizationOptions::load() {
   options.relocalization.max_radius = config.param_nested<double>({"localization", "relocalization"}, "max_radius", options.relocalization.max_radius);
   options.relocalization.max_descriptor_distance =
     config.param_nested<double>({"localization", "relocalization"}, "max_descriptor_distance", options.relocalization.max_descriptor_distance);
+  options.relocalization.candidate_translation_weight =
+    config.param_nested<double>({"localization", "relocalization"}, "candidate_translation_weight", options.relocalization.candidate_translation_weight);
+  options.relocalization.max_candidate_translation_delta =
+    config.param_nested<double>({"localization", "relocalization"}, "max_candidate_translation_delta", options.relocalization.max_candidate_translation_delta);
+  options.relocalization.verification_target_max_submaps =
+    config.param_nested<int>({"localization", "relocalization"}, "verification_target_max_submaps", options.relocalization.verification_target_max_submaps);
+  options.relocalization.verification_target_max_distance =
+    config.param_nested<double>({"localization", "relocalization"}, "verification_target_max_distance", options.relocalization.verification_target_max_distance);
+  options.relocalization.recovery_stable_frames =
+    config.param_nested<int>({"localization", "relocalization"}, "recovery_stable_frames", options.relocalization.recovery_stable_frames);
 
   options.ros.publish_tf = config.param_nested<bool>({"localization", "ros"}, "publish_tf", options.ros.publish_tf);
   options.ros.publish_debug_target_map = config.param_nested<bool>({"localization", "ros"}, "publish_debug_target_map", options.ros.publish_debug_target_map);
+  options.ros.publish_diagnostics = config.param_nested<bool>({"localization", "ros"}, "publish_diagnostics", options.ros.publish_diagnostics);
   options.ros.initial_pose_topic = config.param_nested<std::string>({"localization", "ros"}, "initial_pose_topic", options.ros.initial_pose_topic);
   options.ros.relocalization_service =
     config.param_nested<std::string>({"localization", "ros"}, "relocalization_service", options.ros.relocalization_service);
   options.ros.status_topic = config.param_nested<std::string>({"localization", "ros"}, "status_topic", options.ros.status_topic);
+  options.ros.diagnostic_topic = config.param_nested<std::string>({"localization", "ros"}, "diagnostic_topic", options.ros.diagnostic_topic);
   options.ros.odom_topic = config.param_nested<std::string>({"localization", "ros"}, "odom_topic", options.ros.odom_topic);
   options.ros.pose_topic = config.param_nested<std::string>({"localization", "ros"}, "pose_topic", options.ros.pose_topic);
   options.ros.trajectory_topic = config.param_nested<std::string>({"localization", "ros"}, "trajectory_topic", options.ros.trajectory_topic);

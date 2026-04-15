@@ -17,7 +17,7 @@
 
 namespace glim_localization {
 
-CpuGicpMapRegistration::CpuGicpMapRegistration(const MatchingOptions& options) : options_(options) {}
+CpuGicpMapRegistration::CpuGicpMapRegistration(const MatchingOptions& options) : MapRegistrationBase(options) {}
 
 CpuGicpMapRegistration::~CpuGicpMapRegistration() {}
 
@@ -26,6 +26,7 @@ RegistrationResult CpuGicpMapRegistration::align(
   const LocalTargetMap::ConstPtr& target,
   const Eigen::Isometry3d& initial_T_map_imu) {
   RegistrationResult result;
+  result.backend_name = "cpu_gicp";
   result.T_map_imu = initial_T_map_imu;
 
   if (!frame || !frame->frame) {
@@ -49,25 +50,26 @@ RegistrationResult CpuGicpMapRegistration::align(
 
   gtsam::NonlinearFactorGraph graph;
   auto factor = gtsam::make_shared<gtsam_points::IntegratedGICPFactor>(gtsam::Pose3(), 0, target_cloud, frame->frame);
-  factor->set_max_correspondence_distance(options_.max_correspondence_distance);
-  factor->set_num_threads(options_.num_threads);
+  factor->set_max_correspondence_distance(options().max_correspondence_distance);
+  factor->set_num_threads(options().num_threads);
   graph.add(factor);
 
   gtsam_points::LevenbergMarquardtExtParams lm_params;
-  lm_params.setMaxIterations(options_.max_iterations);
+  lm_params.setMaxIterations(options().max_iterations);
   lm_params.setAbsoluteErrorTol(0.1);
 
   try {
     values = gtsam_points::LevenbergMarquardtOptimizerExt(graph, values, lm_params).optimize();
     result.T_map_imu = Eigen::Isometry3d(values.at<gtsam::Pose3>(0).matrix());
     result.residual = factor->error(values);
-    result.score = factor->inlier_fraction();
-    result.num_inliers = std::isfinite(result.score) ? static_cast<int>(std::lround(std::max(0.0, result.score) * result.num_source_points)) : 0;
+    result.score = clamp_score(factor->inlier_fraction());
+    result.num_inliers = estimate_inliers_from_score(result.score, result.num_source_points);
     result.converged = true;
-    evaluate_result(result, initial_T_map_imu);
+    finalize_result(result, initial_T_map_imu);
 
     spdlog::debug(
-      "CPU GICP registration residual={:.6f} score={:.3f} inliers={}/{} delta_t={:.3f} delta_r={:.3f} accepted={} reason={}",
+      "CPU GICP registration score_type={} residual={:.6f} score={:.3f} inliers={}/{} delta_t={:.3f} delta_r={:.3f} accepted={} reason={}",
+      result.score_type,
       result.residual,
       result.score,
       result.num_inliers,
@@ -82,48 +84,6 @@ RegistrationResult CpuGicpMapRegistration::align(
   }
 
   return result;
-}
-
-void CpuGicpMapRegistration::evaluate_result(RegistrationResult& result, const Eigen::Isometry3d& initial_T_map_imu) const {
-  const Eigen::Isometry3d delta = initial_T_map_imu.inverse() * result.T_map_imu;
-  const Eigen::Quaterniond q_delta(delta.linear());
-  result.pose_delta_translation = delta.translation().norm();
-  result.pose_delta_angle = Eigen::AngleAxisd(q_delta.normalized()).angle();
-
-  result.accepted = false;
-  result.reject_reason.clear();
-
-  if (!result.converged) {
-    result.reject_reason = "not_converged";
-    return;
-  }
-
-  if (!std::isfinite(result.residual) || (options_.max_residual > 0.0 && result.residual > options_.max_residual)) {
-    result.reject_reason = "high_residual";
-    return;
-  }
-
-  if (!std::isfinite(result.score) || result.score < options_.min_score) {
-    result.reject_reason = "low_score";
-    return;
-  }
-
-  if (options_.min_inliers > 0 && result.num_inliers < options_.min_inliers) {
-    result.reject_reason = "few_inliers";
-    return;
-  }
-
-  if (options_.max_pose_correction_translation > 0.0 && result.pose_delta_translation > options_.max_pose_correction_translation) {
-    result.reject_reason = "large_translation_correction";
-    return;
-  }
-
-  if (options_.max_pose_correction_angle > 0.0 && result.pose_delta_angle > options_.max_pose_correction_angle) {
-    result.reject_reason = "large_rotation_correction";
-    return;
-  }
-
-  result.accepted = true;
 }
 
 gtsam_points::PointCloudCPU::Ptr CpuGicpMapRegistration::build_target_cloud(const LocalTargetMap::ConstPtr& target) const {

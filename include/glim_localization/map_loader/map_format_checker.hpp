@@ -8,12 +8,16 @@ namespace glim_localization {
 struct MapFormatCheckResult {
   bool valid = false;
   std::string map_path;
+  std::string detected_format = "unknown";
+  std::string compatibility = "unsupported";
   int num_submaps = 0;
   int num_all_frames = 0;
   int num_matching_cost_factors = 0;
   bool has_graph_txt = false;
   bool has_graph_bin = false;
   bool has_values_bin = false;
+  int missing_submap_directories = 0;
+  int missing_submap_data_files = 0;
   std::vector<std::string> errors;
   std::vector<std::string> warnings;
 };

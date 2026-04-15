@@ -41,14 +41,21 @@ struct RelocalizationOptions {
   double min_radius = 1.0;
   double max_radius = 80.0;
   double max_descriptor_distance = 0.35;
+  double candidate_translation_weight = 0.01;
+  double max_candidate_translation_delta = 80.0;
+  int verification_target_max_submaps = 4;
+  double verification_target_max_distance = 20.0;
+  int recovery_stable_frames = 2;
 };
 
 struct RosOutputOptions {
   bool publish_tf = true;
   bool publish_debug_target_map = true;
+  bool publish_diagnostics = true;
   std::string initial_pose_topic = "/initialpose";
   std::string relocalization_service = "/localization/relocalize";
   std::string status_topic = "/localization/status";
+  std::string diagnostic_topic = "/localization/diagnostics";
   std::string odom_topic = "/localization/odom";
   std::string pose_topic = "/localization/pose";
   std::string trajectory_topic = "/localization/trajectory";

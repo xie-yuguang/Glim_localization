@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 
 #include <gtsam/nonlinear/NonlinearFactorGraph.h>
 #include <gtsam/nonlinear/Values.h>
@@ -52,8 +53,18 @@ private:
   void load_map();
   void apply_initial_pose();
   void build_relocalizer();
+  void validate_initial_pose(const Eigen::Isometry3d& T_map_imu, const char* source);
+  void set_status(LocalizationStatus status, const std::string& reason);
+  void update_tracking_status_after_accept(const std::string& reason);
   LocalTargetMap::Ptr build_or_update_target_map(const Eigen::Isometry3d& T_map_imu);
   bool should_update_target_map(const Eigen::Isometry3d& T_map_imu) const;
+  void apply_corrected_pose_to_frame(const int current, const Eigen::Isometry3d& corrected_T_map_imu, gtsam::Values& new_values);
+  void add_graph_injection_factors(
+    const int current,
+    const Eigen::Isometry3d& corrected_T_map_imu,
+    gtsam::NonlinearFactorGraph& factors,
+    bool include_between_factor) const;
+  void update_map_odom_for_continuity(const Eigen::Isometry3d& corrected_T_map_imu, const Eigen::Isometry3d& reference_T_map_imu);
   gtsam::NonlinearFactorGraph attempt_relocalization(const int current, gtsam::Values& new_values);
   gtsam::NonlinearFactorGraph create_scan_to_map_factor_or_prior(
     const int current,
@@ -64,10 +75,25 @@ private:
 private:
   LocalizationOptions options_;
   LocalizationStatus status_;
+  std::string status_reason_;
   bool map_loaded_;
   bool initial_pose_ready_;
   bool target_map_ready_;
+  bool tracking_started_;
   int consecutive_rejections_;
+  int stable_tracking_successes_;
+  int recovery_frames_remaining_;
+  int relocalization_attempts_;
+  int last_relocalization_candidate_count_;
+  int last_relocalization_verified_rank_;
+  int target_map_rebuild_count_;
+  int target_map_recenter_count_;
+  int target_map_reuse_count_;
+  std::string last_relocalization_message_;
+  double last_relocalization_descriptor_distance_;
+  double last_continuity_translation_;
+  double last_continuity_angle_;
+  bool last_continuity_adjusted_;
 
   LocalizationMap::Ptr map_;
   LocalTargetMap::Ptr target_map_;

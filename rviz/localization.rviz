@@ -93,7 +93,7 @@ Visualization Manager:
         Color: 255; 25; 0
         Head Length: 1
         Head Radius: 0.5
-        Shaft Length: 5
+        Shaft Length: 1
         Shaft Radius: 0.20000000298023224
         Value: Arrow
       Topic:
@@ -113,7 +113,7 @@ Visualization Manager:
       Head Length: 2
       Head Radius: 1
       Name: Localization Pose
-      Shaft Length: 8
+      Shaft Length: 3
       Shaft Radius: 0.20000000298023224
       Shape: Arrow
       Topic:

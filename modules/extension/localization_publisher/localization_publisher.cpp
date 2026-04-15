@@ -8,6 +8,9 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/trigger.hpp>
+#include <diagnostic_msgs/msg/diagnostic_array.hpp>
+#include <diagnostic_msgs/msg/diagnostic_status.hpp>
+#include <diagnostic_msgs/msg/key_value.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/path.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -42,6 +45,21 @@ std::string join_ids(const std::vector<int>& ids) {
     oss << ids[i];
   }
   return oss.str();
+}
+
+std::string format_double(double value, int precision = 3) {
+  std::ostringstream oss;
+  oss.setf(std::ios::fixed);
+  oss.precision(precision);
+  oss << value;
+  return oss.str();
+}
+
+diagnostic_msgs::msg::KeyValue make_key_value(const std::string& key, const std::string& value) {
+  diagnostic_msgs::msg::KeyValue kv;
+  kv.key = key;
+  kv.value = value;
+  return kv;
 }
 
 Eigen::Isometry3d pose_msg_to_isometry(const geometry_msgs::msg::Pose& pose) {
@@ -120,8 +138,14 @@ std_msgs::msg::ColorRGBA status_color(const LocalizationStatus status) {
       color.g = 0.8f;
       color.b = 0.2f;
       break;
+    case LocalizationStatus::DEGRADED:
+      color.r = 0.95f;
+      color.g = 0.45f;
+      color.b = 0.1f;
+      break;
     case LocalizationStatus::INITIALIZING:
     case LocalizationStatus::RELOCALIZING:
+    case LocalizationStatus::RECOVERING:
       color.r = 0.95f;
       color.g = 0.75f;
       color.b = 0.2f;
@@ -157,10 +181,52 @@ visualization_msgs::msg::Marker make_active_submaps_marker(const LocalizationOpt
   marker.scale.z = 0.8;
   marker.color = status_color(result.status);
   std::ostringstream oss;
-  oss << "status=" << to_string(result.status) << "\nscore=" << result.matching_score << "\nactive_submaps=[" << join_ids(result.target_submap_ids)
-      << "]";
+  oss << "status=" << to_string(result.status) << "\nreason=" << result.status_reason << "\nscore=" << format_double(result.matching_score)
+      << "\nbackend=" << (result.backend_name.empty() ? "n/a" : result.backend_name)
+      << "\nrecover_left=" << result.recovery_frames_remaining << "\nactive_submaps=[" << join_ids(result.target_submap_ids) << "]";
   marker.text = oss.str();
   return marker;
+}
+
+diagnostic_msgs::msg::DiagnosticStatus make_diagnostic_status(const LocalizationResult& result) {
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  status.name = "glim_localization/runtime";
+  status.hardware_id = "glim_localization";
+  status.message = result.status_reason.empty() ? to_string(result.status) : result.status_reason;
+
+  switch (result.status) {
+    case LocalizationStatus::TRACKING:
+      status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+      break;
+    case LocalizationStatus::LOST:
+      status.level = diagnostic_msgs::msg::DiagnosticStatus::ERROR;
+      break;
+    default:
+      status.level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
+      break;
+  }
+
+  status.values.push_back(make_key_value("status", to_string(result.status)));
+  status.values.push_back(make_key_value("reason", result.status_reason));
+  status.values.push_back(make_key_value("matching_score", format_double(result.matching_score)));
+  status.values.push_back(make_key_value("backend", result.backend_name));
+  status.values.push_back(make_key_value("score_type", result.score_type));
+  status.values.push_back(make_key_value("reject_reason", result.reject_reason));
+  status.values.push_back(make_key_value("consecutive_rejections", std::to_string(result.consecutive_rejections)));
+  status.values.push_back(make_key_value("relocalization_message", result.relocalization_message));
+  status.values.push_back(make_key_value("relocalization_attempts", std::to_string(result.relocalization_attempts)));
+  status.values.push_back(make_key_value("relocalization_candidate_count", std::to_string(result.relocalization_candidate_count)));
+  status.values.push_back(make_key_value("relocalization_verified_rank", std::to_string(result.relocalization_verified_rank)));
+  status.values.push_back(make_key_value("recovery_frames_remaining", std::to_string(result.recovery_frames_remaining)));
+  status.values.push_back(make_key_value("stable_tracking_successes", std::to_string(result.stable_tracking_successes)));
+  status.values.push_back(make_key_value("descriptor_distance", format_double(result.descriptor_distance)));
+  status.values.push_back(make_key_value("pose_delta_translation", format_double(result.pose_delta_translation)));
+  status.values.push_back(make_key_value("pose_delta_angle", format_double(result.pose_delta_angle)));
+  status.values.push_back(make_key_value("continuity_adjusted", result.continuity_adjusted ? "true" : "false"));
+  status.values.push_back(make_key_value("continuity_translation", format_double(result.continuity_translation)));
+  status.values.push_back(make_key_value("continuity_angle", format_double(result.continuity_angle)));
+  status.values.push_back(make_key_value("active_submaps", join_ids(result.target_submap_ids)));
+  return status;
 }
 
 }  // namespace
@@ -180,6 +246,9 @@ public:
 
   std::vector<glim::GenericTopicSubscription::Ptr> create_subscriptions(rclcpp::Node& node) override {
     status_pub_ = node.create_publisher<std_msgs::msg::String>(options_.ros.status_topic, 10);
+    if (options_.ros.publish_diagnostics) {
+      diagnostics_pub_ = node.create_publisher<diagnostic_msgs::msg::DiagnosticArray>(options_.ros.diagnostic_topic, 10);
+    }
     odom_pub_ = node.create_publisher<nav_msgs::msg::Odometry>(options_.ros.odom_topic, 10);
     pose_pub_ = node.create_publisher<geometry_msgs::msg::PoseStamped>(options_.ros.pose_topic, 10);
     trajectory_pub_ = node.create_publisher<nav_msgs::msg::Path>(options_.ros.trajectory_topic, rclcpp::QoS(1).transient_local());
@@ -212,6 +281,7 @@ public:
     spdlog::info("  initial_pose_topic={}", options_.ros.initial_pose_topic);
     spdlog::info("  relocalization_service={}", options_.ros.relocalization_service);
     spdlog::info("  status_topic={}", options_.ros.status_topic);
+    spdlog::info("  diagnostic_topic={}", options_.ros.diagnostic_topic);
     spdlog::info("  odom_topic={}", options_.ros.odom_topic);
     spdlog::info("  pose_topic={}", options_.ros.pose_topic);
     spdlog::info("  trajectory_topic={}", options_.ros.trajectory_topic);
@@ -258,6 +328,7 @@ private:
     }
 
     publish_status(*result);
+    publish_diagnostics(*result);
     publish_pose(*result, *frame);
     publish_trajectory(*result);
     publish_input_scan(*frame);
@@ -273,8 +344,20 @@ private:
     }
 
     std_msgs::msg::String msg;
-    msg.data = std::string(to_string(result.status)) + " score=" + std::to_string(result.matching_score);
+    msg.data = std::string(to_string(result.status)) + " reason=" + result.status_reason + " score=" + format_double(result.matching_score) +
+               " reject=" + (result.reject_reason.empty() ? "none" : result.reject_reason);
     status_pub_->publish(msg);
+  }
+
+  void publish_diagnostics(const LocalizationResult& result) {
+    if (!diagnostics_pub_) {
+      return;
+    }
+
+    diagnostic_msgs::msg::DiagnosticArray msg;
+    msg.header.stamp = glim::from_sec(result.stamp);
+    msg.status.push_back(make_diagnostic_status(result));
+    diagnostics_pub_->publish(msg);
   }
 
   void publish_pose(const LocalizationResult& result, const glim::EstimationFrame& frame) {
@@ -384,8 +467,6 @@ private:
     odom_base.header.frame_id = options_.odom_frame;
     odom_base.child_frame_id = options_.base_frame;
 
-    // P2 keeps T_map_odom as identity, so T_odom_base == T_map_imu.  A later
-    // relocalization/reset stage can maintain a non-identity T_map_odom.
     const Eigen::Isometry3d T_odom_imu = result.T_map_odom.inverse() * result.T_map_imu;
     const Eigen::Quaterniond q_odom_imu(T_odom_imu.linear());
     odom_base.transform.translation.x = T_odom_imu.translation().x();
@@ -433,6 +514,7 @@ private:
   double last_trajectory_stamp_;
 
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
+  rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_pub_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr trajectory_pub_;

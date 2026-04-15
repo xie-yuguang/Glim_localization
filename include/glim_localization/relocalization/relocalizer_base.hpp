@@ -22,6 +22,8 @@ struct RelocalizationCandidate {
   int submap_id = -1;
   double descriptor_distance = 0.0;
   double yaw = 0.0;
+  double translation_distance = 0.0;
+  double ranking_score = 0.0;
   LocalizationMap::SubMapConstPtr submap;
   Eigen::Isometry3d T_map_imu_guess = Eigen::Isometry3d::Identity();
 };
@@ -34,6 +36,9 @@ struct RelocalizationResult {
   RelocalizationCandidate candidate;
   RegistrationResult registration;
   LocalTargetMap::Ptr target_map;
+  int evaluated_candidates = 0;
+  int accepted_candidates = 0;
+  int verified_candidate_rank = -1;
 };
 
 class RelocalizerBase {

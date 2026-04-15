@@ -23,10 +23,6 @@ public:
 
 private:
   gtsam_points::PointCloudCPU::Ptr build_target_cloud(const LocalTargetMap::ConstPtr& target) const;
-  void evaluate_result(RegistrationResult& result, const Eigen::Isometry3d& initial_T_map_imu) const;
-
-private:
-  MatchingOptions options_;
 };
 
 }  // namespace glim_localization

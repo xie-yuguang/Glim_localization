@@ -44,6 +44,9 @@ MapFormatCheckResult MapFormatChecker::check(const std::string& map_path) const 
     return result;
   }
 
+  result.detected_format = "glim_dump";
+  result.compatibility = "supported";
+
   if (!result.has_graph_bin) {
     result.warnings.push_back("missing graph.bin; localization loader can still load submaps, but full graph recovery is unavailable");
   }
@@ -99,11 +102,13 @@ void MapFormatChecker::check_submap_directories(const std::string& map_path, Map
     const fs::path data_txt = submap_dir / "data.txt";
 
     if (!fs::exists(submap_dir) || !fs::is_directory(submap_dir)) {
+      result.missing_submap_directories++;
       result.errors.push_back("missing submap directory: " + submap_path);
       continue;
     }
 
     if (!fs::exists(data_txt)) {
+      result.missing_submap_data_files++;
       result.errors.push_back("missing submap data.txt: " + data_txt.string());
     }
   }

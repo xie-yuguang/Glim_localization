@@ -70,6 +70,8 @@ int main() {
 
   auto frame = std::make_shared<glim::EstimationFrame>();
   frame->T_lidar_imu.setIdentity();
+  frame->T_world_imu.setIdentity();
+  frame->T_world_imu.translation() = Eigen::Vector3d(19.0, 0.0, 0.0);
   frame->frame = std::make_shared<gtsam_points::PointCloudCPU>(make_pattern(2));
 
   const auto candidates = relocalizer.query(frame, 2);
@@ -83,6 +85,8 @@ int main() {
   }
   expect(candidates.front().submap_id == 2, "best candidate must match the similar submap");
   expect(static_cast<bool>(candidates.front().submap), "candidate must carry submap pointer");
+  expect(candidates.front().ranking_score >= candidates.front().descriptor_distance, "ranking score must include descriptor term");
+  expect(candidates.front().translation_distance >= 0.0, "translation distance must be non-negative");
 
   std::cout << "test_scan_context_relocalizer passed: best_submap=" << candidates.front().submap_id
             << " descriptor_distance=" << candidates.front().descriptor_distance << std::endl;

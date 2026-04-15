@@ -81,14 +81,22 @@ std::vector<RelocalizationCandidate> ScanContextRelocalizer::query(const glim::E
     candidate.descriptor_distance = distance;
     candidate.yaw = yaw;
     candidate.T_map_imu_guess = initial_guess_from_candidate(entry, yaw, *frame);
+    candidate.translation_distance = (candidate.T_map_imu_guess.translation() - frame->T_world_imu.translation()).norm();
+    if (options_.max_candidate_translation_delta > 0.0 && candidate.translation_distance > options_.max_candidate_translation_delta) {
+      continue;
+    }
+    candidate.ranking_score = candidate.descriptor_distance + options_.candidate_translation_weight * candidate.translation_distance;
     candidates.push_back(candidate);
   }
 
   std::sort(candidates.begin(), candidates.end(), [](const RelocalizationCandidate& lhs, const RelocalizationCandidate& rhs) {
-    if (lhs.descriptor_distance == rhs.descriptor_distance) {
-      return lhs.submap_id < rhs.submap_id;
+    if (lhs.ranking_score == rhs.ranking_score) {
+      if (lhs.descriptor_distance == rhs.descriptor_distance) {
+        return lhs.submap_id < rhs.submap_id;
+      }
+      return lhs.descriptor_distance < rhs.descriptor_distance;
     }
-    return lhs.descriptor_distance < rhs.descriptor_distance;
+    return lhs.ranking_score < rhs.ranking_score;
   });
 
   if (limit > 0 && static_cast<int>(candidates.size()) > limit) {

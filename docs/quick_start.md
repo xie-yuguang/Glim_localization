@@ -8,6 +8,21 @@ GLIM dump 地图 + ROS2 rosbag + 初始位姿 -> 离线定位 -> 输出轨迹文
 
 本文只覆盖当前代码中已经落地的离线 rosbag 流程，不展开在线 ROS2、重定位调参和完整架构细节。
 
+本文职责边界：
+
+- 负责：第一次跑通离线最小闭环
+- 不负责：完整部署、在线运行、参数全表、FAQ、资源监测
+
+对应文档：
+
+- 基线与契约：`docs/baseline_and_contract.md`
+- 完整部署：`docs/deployment_and_run.md`
+- 参数参考：`docs/config_reference.md`
+- ROS 接口：`docs/ros_interface.md`
+- 工程化与回归：`docs/engineering_playbook.md`
+- 常见问题：`docs/faq.md`
+- 资源监测：`docs/resource_monitoring.md`
+
 ## 1. 这是什么
 
 `glim_localization` 是基于 `glim` 的 localization-only 模块。它不在线建图，而是加载已有 GLIM dump 地图，把当前 LiDAR/IMU 数据匹配到固定地图上，并输出定位轨迹。

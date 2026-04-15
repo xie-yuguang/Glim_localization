@@ -2,6 +2,16 @@
 
 本文档提供一套从第三方视角监测 `glim_localization` 运行资源的方法。所有方案都在进程外部执行，不需要把监测逻辑集成进 `glim_localization` 主代码。
 
+本文职责边界：
+
+- 负责：第三方资源采样、图表、HTML 报告和硬件评估建议
+- 不负责：定义 localization 功能基线本身，也不替代精度/轨迹回归
+
+如果你要确认“P0 标准回归基线是什么、CPU-only 与 GPU-enabled 的最小闭环如何定义、topic/frame/status 契约是什么”，请先看：
+
+- `docs/baseline_and_contract.md`
+- `docs/engineering_playbook.md`
+
 适用场景：
 
 - 离线 rosbag 运行：`ros2 run glim_ros glim_rosbag ...`
@@ -88,6 +98,10 @@ sudo apt install "linux-tools-$(uname -r)"
 - `tools/monitor/run_with_time.sh`
 - `tools/monitor/monitor_ps.sh`
 - `tools/monitor/summarize_usage.py`
+
+如果你希望把“离线运行 + trajectory + benchmark + 资源监测 + HTML 报告”收成一次标准实验，推荐直接用：
+
+- `tools/run_standard_experiment.sh`
 
 ### 4.1 最小方案输出内容
 
