@@ -3,9 +3,10 @@
 <package format="3">
   <name>glim_localization</name>
   <version>0.1.0</version>
-  <description>Localization-only runtime modules based on GLIM</description>
-  <maintainer email="k.koide@aist.go.jp">k.koide</maintainer>
-  <author email="k.koide@aist.go.jp">k.koide</author>
+  <description>Localization-only runtime modules based on / integrating with koide3/Glim. This package is not the official GLIM project.</description>
+  <maintainer email="xie-yuguang@users.noreply.github.com">xie-yuguang</maintainer>
+  <author email="xie-yuguang@users.noreply.github.com">xie-yuguang</author>
+  <author email="k.koide@aist.go.jp">Kenji Koide (upstream GLIM)</author>
   <license>MIT</license>
 
   <buildtool_depend condition="$ROS_VERSION == 1">catkin</buildtool_depend>
@@ -23,6 +24,8 @@
   <depend condition="$ROS_VERSION == 2">geometry_msgs</depend>
   <depend condition="$ROS_VERSION == 2">tf2_ros</depend>
   <depend condition="$ROS_VERSION == 2">visualization_msgs</depend>
+  <exec_depend condition="$ROS_VERSION == 2">launch</exec_depend>
+  <exec_depend condition="$ROS_VERSION == 2">launch_ros</exec_depend>
 
   <export>
     <build_type condition="$ROS_VERSION == 2">ament_cmake</build_type>

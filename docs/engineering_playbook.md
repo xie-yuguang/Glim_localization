@@ -40,6 +40,41 @@ bash tools/run_standard_experiment.sh \
   --enhanced
 ```
 
+短片段 CPU 调试模板：
+
+```bash
+bash tools/run_standard_experiment.sh \
+  --bag /path/to/bag \
+  --map /path/to/map \
+  --initial-pose "0 0 0 0 0 0" \
+  --output-dir /tmp/glim_exp_cpu_short \
+  --matching-method cpu_gicp \
+  --start-offset 0 \
+  --duration 30 \
+  --timeout-sec 90
+```
+
+失败、timeout 或进程被终止时，脚本仍会生成 `experiment_record.md`、`failure_summary.md`、`logs/stdout_tail.txt`、`logs/stderr_tail.txt`、`logs/state_transition_summary.txt` 和 `logs/registration_rejection_summary.txt`。`--max-frames` 目前只记录请求，底层 `glim_rosbag` 暂无逐帧停止参数。
+
+Phase 0.6 debug / guard 实验模板：
+
+```bash
+bash tools/run_standard_experiment.sh \
+  --bag /path/to/bag \
+  --map /path/to/map \
+  --initial-pose "0 0 0 0 0 0" \
+  --output-dir /tmp/glim_localization_phase0_6/debug_run \
+  --matching-method cpu_gicp \
+  --start-offset 0 \
+  --duration 15 \
+  --timeout-sec 90 \
+  --debug-csv \
+  --target-rebuild-guard \
+  --smoother-guard
+```
+
+`--debug-csv` 会生成 `debug/localization_debug.csv`。`--target-rebuild-guard` 和 `--smoother-guard` 是默认关闭的诊断实验开关，只能用于判断发散和 smoother 欠约束是否更可控，不能单独作为定位成功依据。
+
 GPU 版本：
 
 ```bash

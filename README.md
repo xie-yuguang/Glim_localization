@@ -80,6 +80,11 @@ glim_localization/
   config/
     config.json
     localization.json
+    localization.cpu.json
+    localization.gpu.json
+    localization.template.json
+  launch/
+    localization.launch.py
   include/glim_localization/
     core/
     initialization/
@@ -107,7 +112,12 @@ glim_localization/
 
 - `config/`
   - `config.json`：GLIM 全局配置索引文件，将 `config_ros`、`config_odometry`、`config_localization` 等都映射到 `localization.json`。
-  - `localization.json`：localization-only 主配置。
+  - `localization.json`：默认 localization-only 主配置，默认使用 CPU-safe `cpu_gicp`，`localization.map_path` 默认为空，由运行脚本或用户配置注入。
+  - `localization.cpu.json`：CPU baseline 配置模板。
+  - `localization.gpu.json`：GPU VGICP 配置模板，需要 CUDA 构建和 gtsam_points CUDA 支持。
+  - `localization.template.json`：无个人绝对路径的通用模板。
+- `launch/`
+  - `localization.launch.py`：ROS2 在线 localization 最小 launch，包装 `glim_ros` 包的 `glim_rosnode`。
 - `include/glim_localization/core/`
   - `localization_options.hpp`：配置结构体。
   - `localization_status.hpp`：状态机枚举。
@@ -193,7 +203,7 @@ glim_localization/
 
 注意事项：
 
-- 当前 `package.xml` 中 `maintainer` 仍是 `TODO`，这是项目元信息待完善项，不影响本地开发编译。
+- 本项目基于 / 集成 `koide3/Glim`，但不是官方 GLIM 项目；上游 attribution 保留在 `package.xml`。
 - 当前没有单独的 `glim_localization_ros` 包。
 - 当前 ROS2 可执行入口来自 `glim_ros2` 包名 `glim_ros`，不是 `glim_ros2`。
 
@@ -294,6 +304,25 @@ ls install/glim_localization/lib/glim_localization/benchmark_localization
 
 注意：`glim_ros2` 中 `GlimROS` 的默认 `config_path` 是 `"config"`。如果传入相对路径，它会按 `share/glim/<config_path>` 解析。因此运行 localization 时建议传绝对路径。
 
+默认 `config/localization.json` 面向 CPU baseline，不包含个人机器上的 map 路径：
+
+- `localization.map_path = ""`
+- `localization.matching.method = "cpu_gicp"`
+
+`config/localization.cpu.json` 与默认配置保持 CPU-safe 语义，可作为回归 baseline 模板。`config/localization.gpu.json` 将 matching backend 设置为 `gpu_vgicp`，使用前需要确认：
+
+```bash
+colcon build --symlink-install --packages-select glim_localization --cmake-args -DBUILD_WITH_CUDA=ON
+```
+
+同时还需要确认 `gtsam_points` 已启用 CUDA；否则运行时请求 `gpu_vgicp` 会打印 warning 并回退到 CPU GICP。
+
+在线启动可使用最小 launch：
+
+```bash
+ros2 launch glim_localization localization.launch.py config_path:=/absolute/path/to/config_dir
+```
+
 ### 5.1 当前 `localization.json` 完整示例
 
 ```json
@@ -367,14 +396,36 @@ ls install/glim_localization/lib/glim_localization/benchmark_localization
       "num_sectors": 60,
       "min_radius": 1.0,
       "max_radius": 80.0,
-      "max_descriptor_distance": 0.35
+      "max_descriptor_distance": 0.35,
+      "candidate_translation_weight": 0.01,
+      "max_candidate_translation_delta": 80.0,
+      "verification_target_max_submaps": 4,
+      "verification_target_max_distance": 20.0,
+      "recovery_stable_frames": 2
+    },
+    "debug": {
+      "csv_enable": false,
+      "csv_path": "/tmp/glim_localization_debug.csv"
+    },
+    "smoother_guard": {
+      "enable": false,
+      "mode": "hold_last_pose_prior",
+      "max_lost_frames_without_prior": 0
+    },
+    "target_rebuild_guard": {
+      "enable": false,
+      "confirmation_frames": 2,
+      "near_threshold_ratio": 0.8,
+      "force_degraded_on_large_correction": true
     },
     "ros": {
       "publish_tf": true,
       "publish_debug_target_map": true,
+      "publish_diagnostics": true,
       "initial_pose_topic": "/initialpose",
       "relocalization_service": "/localization/relocalize",
       "status_topic": "/localization/status",
+      "diagnostic_topic": "/localization/diagnostics",
       "odom_topic": "/localization/odom",
       "pose_topic": "/localization/pose",
       "trajectory_topic": "/localization/trajectory",
@@ -472,6 +523,29 @@ ls install/glim_localization/lib/glim_localization/benchmark_localization
 - `candidate_translation_weight` 与 `max_candidate_translation_delta` 用于控制候选排序与过滤。
 - `verification_target_*` 用于控制几何验证时的局部 target map 范围。
 - `recovery_stable_frames` 用于控制 relocalization 成功后多久从 `RECOVERING` 回到 `TRACKING`。
+
+`localization.debug`：
+
+- `csv_enable`：默认 `false`。开启后输出 frame 级 debug CSV。
+- `csv_path`：CSV 输出路径，标准实验脚本会注入到 `output_dir/debug/localization_debug.csv`。
+
+`localization.smoother_guard`：
+
+- `enable`：默认 `false`。开启后只在 LOST/RELOCALIZING 且无候选/无有效 scan-to-map prior 时触发。
+- `mode`：当前支持 `hold_last_pose_prior`。这是防止 smoother 欠约束的实验保护，不代表定位成功。
+- `max_lost_frames_without_prior`：允许连续多少个 LOST 无 prior 帧后才触发，默认 `0` 表示立即触发。
+- `max_consecutive_hold_priors`：连续 hold prior 上限，默认 `30`。
+- `write_trajectory_during_hold`：默认 `false`。hold frame 不写入 trajectory，避免冻结轨迹被误当成成功定位。
+- `publish_pose_during_hold`：当前作为配置占位；publisher 层 status/pose 分离仍待后续实现。
+
+`localization.target_rebuild_guard`：
+
+- `enable`：默认 `false`。开启后只影响 target map rebuild 后的短确认窗口。
+- `confirmation_frames`：rebuild 后继续保护的帧数。
+- `near_threshold_ratio`：当 `delta_t > max_pose_correction_translation * near_threshold_ratio` 时拒绝 accepted correction。
+- `force_degraded_on_large_correction`：保留配置项，当前最小实现表现为 reject 并进入 DEGRADED/保持恢复状态。
+- `consistency_translation` / `consistency_angle`：pending large correction 一致性诊断阈值。
+- `cooldown_frames`：large correction 后延长 confirmation window 的帧数。
 
 `localization.ros`：
 
@@ -1242,7 +1316,7 @@ bash Glim_localization/tools/monitor/run_with_time.sh \
   -o /tmp/glim_monitor_offline \
   -- \
   ros2 run glim_ros glim_rosbag /path/to/your.bag \
-  --ros-args -p "config_path:=/home/xie/Glim/src/Glim_localization/config"
+  --ros-args -p "config_path:=/absolute/path/to/glim_localization/config"
 ```
 
 在线 ROS2 示例：
@@ -1254,7 +1328,7 @@ bash Glim_localization/tools/monitor/run_with_time.sh \
   --gpu \
   -- \
   ros2 run glim_ros glim_rosnode \
-  --ros-args -p "config_path:=/home/xie/Glim/src/Glim_localization/config"
+  --ros-args -p "config_path:=/absolute/path/to/glim_localization/config"
 ```
 
 输出目录会自动生成：
@@ -1328,10 +1402,52 @@ bash tools/run_standard_experiment.sh \
   --enhanced
 ```
 
+短片段调试时可以限制 rosbag 回放窗口，并给外层运行设置 wall-time timeout：
+
+```bash
+bash tools/run_standard_experiment.sh \
+  --bag /path/to/bag \
+  --map /path/to/map \
+  --initial-pose "0 0 0 0 0 0" \
+  --output-dir /tmp/glim_exp_cpu_short \
+  --matching-method cpu_gicp \
+  --start-offset 0 \
+  --duration 30 \
+  --timeout-sec 90
+```
+
+`--start-offset` 和 `--duration` 会透传给 `glim_rosbag` 的 `start_offset` / `playback_duration` ROS 参数。`--max-frames` 目前只会记录到 manifest；当前上游 `glim_rosbag` 没有逐帧停止参数。
+
+Phase 0.6 起，标准实验还支持三个默认关闭的调试/实验开关：
+
+- `--debug-csv`：在 `output_dir/debug/localization_debug.csv` 输出 frame 级诊断数据。
+- `--relocalization-debug`：在 Debug CSV 中记录 ScanContext query cloud、descriptor、raw top-k、descriptor/translation filter 和 verification 结果；只记录诊断，不改变 relocalization gating。
+- `--verify-rejected-topk`：Phase 0.9 诊断开关，对被 descriptor 阈值过滤的 raw top-k 做 debug-only geometric verification；结果只写 CSV/报告，不会更新 pose、smoother、trajectory 或状态。
+- `--smoother-guard`：在 LOST/RELOCALIZING 且无重定位候选时，对当前 pose 添加 hold-last-pose prior，防止 fixed-lag smoother 持续接收欠约束 pose。该状态仍是 LOST，不代表定位恢复。
+- `--target-rebuild-guard`：在 target map rebuild 后的短确认窗口内，拒绝接近平移 correction 阈值的 scan-to-map 结果，reject reason 为 `target_rebuild_large_correction`。
+- `--lost-recovery`：实验性 LOST recovery policy，LOST 后按周期尝试 relocalization，等待帧记录为 `lost_recovery_period_wait`，并通过 smoother guard 防止欠约束 smoother 更新。
+- `--smoother-guard-max-holds`、`--target-rebuild-guard-confirmation-frames`、`--lost-recovery-period-frames` 等参数可用于 Phase 0.x 实验，不建议作为默认产品配置。
+
+当前可复现的 10 秒 smoke baseline 可以用脚本启动：
+
+```bash
+bash tools/run_smoke_baseline_10s.sh \
+  --bag /path/to/bag \
+  --map /path/to/glim_dump \
+  --output-dir /tmp/glim_localization_smoke_10s
+```
+
+这个 smoke baseline 的验收目标是约 101 帧、无 LOST、无 registration rejection、无 GTSAM warning；它不是完整 localization baseline。
+
 这个脚本会统一生成：
 
 - `experiment_manifest.txt`
 - `experiment_record.md`
+- `failure_summary.md`
+- `logs/stdout_tail.txt`
+- `logs/stderr_tail.txt`
+- `logs/state_transition_summary.txt`
+- `logs/registration_rejection_summary.txt`
 - `monitor/`
 - `resource_report/`
 - `trajectory/`
@@ -1341,6 +1457,69 @@ bash tools/run_standard_experiment.sh \
 
 - `docs/engineering_playbook.md`
 - `docs/ros_interface.md`
+
+### 10.7 Debug CSV 自动分析与 Phase 0 回归矩阵
+
+Phase 0.7 起，Debug CSV 可用标准库 Python 工具自动分析：
+
+```bash
+python3 tools/analyze_debug_csv.py \
+  /tmp/glim_exp_cpu/debug/localization_debug.csv \
+  --out /tmp/glim_exp_cpu/debug_csv_analysis
+```
+
+输出：
+
+- `debug_csv_summary.md`
+- `state_timeline.csv`
+- `target_rebuild_events.csv`
+- `correction_statistics.csv`
+- `lost_segments.csv`
+- `guard_actions.csv`
+- `relocalization_summary.csv`
+- `relocalization_topk_summary.csv`
+- `relocalization_failure_reasons.csv`
+- `relocalization_threshold_sweep.csv`
+- `relocalization_threshold_sweep.md`
+
+可以直接做 descriptor 阈值 sweep：
+
+```bash
+python3 tools/analyze_debug_csv.py \
+  /tmp/glim_exp_cpu/debug/localization_debug.csv \
+  --out /tmp/glim_exp_cpu/debug_csv_analysis \
+  --threshold-sweep 0.30,0.35,0.40,0.45,0.50,0.55,0.60,0.70
+```
+
+Phase 0.9 还提供单独的 ScanContext descriptor sweep 工具：
+
+```bash
+python3 tools/sweep_scan_context_descriptors.py \
+  /tmp/glim_exp_cpu/debug/localization_debug.csv \
+  --out /tmp/glim_exp_cpu/scan_context_sweep \
+  --frame-start 252 \
+  --frame-end 300
+```
+
+ScanContext database 自检工具：
+
+```bash
+ros2 run glim_localization check_scan_context_relocalizer /path/to/glim_dump 10
+```
+
+该工具会对每个 map submap 做 self-query，输出 top1/top5 是否包含自身、descriptor distance 分布和失败 submap。它只用于离线诊断，不参与线上 localization。
+
+统一回归矩阵入口：
+
+```bash
+bash tools/run_phase0_regression_matrix.sh \
+  --bag /path/to/bag \
+  --map /path/to/glim_dump \
+  --output-dir /tmp/glim_localization_phase0_regression \
+  --initial-pose "0 0 0 0 0 0"
+```
+
+该矩阵包含 `smoke_10s`、`failure_15s_guard_off`、`failure_15s_confirmation_guard` 和 `experimental_30s_best`。30s best 是可控失败检查，不等价于稳定 localization baseline。
 
 ## 11. 调试建议
 

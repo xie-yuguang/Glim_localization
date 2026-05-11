@@ -106,19 +106,42 @@ def summarize_ps(path: Path):
     rss_values = [parse_number(r["rss_kb"]) for r in rows if parse_number(r["rss_kb"]) is not None]
     thread_values = [parse_number(r["nlwp"]) for r in rows if parse_number(r["nlwp"]) is not None]
     etimes_values = [parse_number(r["etimes_s"]) for r in rows if parse_number(r["etimes_s"]) is not None]
+    pid_count_values = [parse_number(r.get("pid_count")) for r in rows if parse_number(r.get("pid_count")) is not None]
     read_bytes_values = [parse_number(r["read_bytes"]) for r in rows if parse_number(r["read_bytes"]) is not None]
     write_bytes_values = [parse_number(r["write_bytes"]) for r in rows if parse_number(r["write_bytes"]) is not None]
     rchar_values = [parse_number(r["rchar"]) for r in rows if parse_number(r["rchar"]) is not None]
     wchar_values = [parse_number(r["wchar"]) for r in rows if parse_number(r["wchar"]) is not None]
+    observed_pids = sorted(
+        {
+            pid
+            for row in rows
+            for pid in (row.get("pids") or "").split(";")
+            if pid.strip()
+        },
+        key=lambda text: int(text) if text.isdigit() else text,
+    )
+    observed_commands = sorted(
+        {
+            command.split(":", 1)[1] if ":" in command else command
+            for row in rows
+            for command in (row.get("commands") or "").split(";")
+            if command.strip()
+        }
+    )
 
     return {
         "num_samples": len(rows),
+        "ps_sampling_scope": "process_tree",
         "avg_cpu_pct_ps": sum(cpu_values) / len(cpu_values) if cpu_values else None,
         "peak_cpu_pct_ps": max(cpu_values) if cpu_values else None,
         "avg_rss_mb_ps": (sum(rss_values) / len(rss_values) / 1024.0) if rss_values else None,
         "peak_rss_mb_ps": (max(rss_values) / 1024.0) if rss_values else None,
         "peak_threads": max(thread_values) if thread_values else None,
         "runtime_s_ps": max(etimes_values) if etimes_values else None,
+        "avg_process_count_ps": sum(pid_count_values) / len(pid_count_values) if pid_count_values else None,
+        "peak_process_count_ps": max(pid_count_values) if pid_count_values else None,
+        "observed_pids": observed_pids,
+        "observed_commands": observed_commands,
         "read_bytes_delta": (max(read_bytes_values) - min(read_bytes_values)) if len(read_bytes_values) >= 2 else None,
         "write_bytes_delta": (max(write_bytes_values) - min(write_bytes_values)) if len(write_bytes_values) >= 2 else None,
         "rchar_delta": (max(rchar_values) - min(rchar_values)) if len(rchar_values) >= 2 else None,
@@ -197,6 +220,7 @@ def main():
         f"input_dir: {input_dir}",
         f"command: {summary.get('command', '')}",
         f"exit_code: {format_value(summary.get('exit_code'))}",
+        f"ps_sampling_scope: {format_value(summary.get('ps_sampling_scope'))}",
         f"wall_time_s: {format_value(summary.get('wall_time_s'))}",
         f"user_time_s: {format_value(summary.get('user_time_s'))}",
         f"sys_time_s: {format_value(summary.get('sys_time_s'))}",
@@ -208,6 +232,9 @@ def main():
         f"avg_rss_mb_ps: {format_value(summary.get('avg_rss_mb_ps'))}",
         f"peak_threads: {format_value(summary.get('peak_threads'))}",
         f"runtime_s_ps: {format_value(summary.get('runtime_s_ps'))}",
+        f"avg_process_count_ps: {format_value(summary.get('avg_process_count_ps'))}",
+        f"peak_process_count_ps: {format_value(summary.get('peak_process_count_ps'))}",
+        f"observed_commands: {', '.join(summary.get('observed_commands') or [])}",
         f"read_bytes_delta: {format_value(summary.get('read_bytes_delta'))}",
         f"write_bytes_delta: {format_value(summary.get('write_bytes_delta'))}",
         f"rchar_delta: {format_value(summary.get('rchar_delta'))}",

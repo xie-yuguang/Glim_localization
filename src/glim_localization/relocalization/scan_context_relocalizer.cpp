@@ -58,18 +58,36 @@ bool ScanContextRelocalizer::ready() const {
 
 std::vector<RelocalizationCandidate> ScanContextRelocalizer::query(const glim::EstimationFrame::ConstPtr& frame, int max_candidates) const {
   std::vector<RelocalizationCandidate> candidates;
-  if (!ready() || !frame || !frame->frame || frame->frame->size() == 0) {
+  last_query_diagnostics_ = QueryDiagnostics();
+  last_query_diagnostics_.query_enable = true;
+  last_query_diagnostics_.database_size = static_cast<int>(entries_.size());
+  last_query_diagnostics_.topk_requested = max_candidates > 0 ? max_candidates : options_.max_candidates;
+
+  if (!ready()) {
+    last_query_diagnostics_.failure_reason = "database_empty";
+    return candidates;
+  }
+  if (!frame || !frame->frame || frame->frame->size() == 0) {
+    last_query_diagnostics_.failure_reason = "empty_query_cloud";
     return candidates;
   }
 
+  last_query_diagnostics_.query_points = frame->frame->size();
   const Eigen::MatrixXd query_descriptor = make_descriptor(frame->frame, Eigen::Vector3d::Zero());
+  last_query_diagnostics_.descriptor_nonempty_bins = count_nonempty_bins(query_descriptor);
+  last_query_diagnostics_.descriptor_valid = last_query_diagnostics_.descriptor_nonempty_bins > 0;
+  if (!last_query_diagnostics_.descriptor_valid) {
+    last_query_diagnostics_.failure_reason = "descriptor_invalid";
+    return candidates;
+  }
   const int limit = max_candidates > 0 ? max_candidates : options_.max_candidates;
 
   candidates.reserve(entries_.size());
   for (const auto& entry : entries_) {
     int best_shift = 0;
     const double distance = descriptor_distance(entry.descriptor, query_descriptor, best_shift);
-    if (!std::isfinite(distance) || distance > options_.max_descriptor_distance) {
+    if (!std::isfinite(distance)) {
+      last_query_diagnostics_.filtered_by_other++;
       continue;
     }
 
@@ -82,12 +100,32 @@ std::vector<RelocalizationCandidate> ScanContextRelocalizer::query(const glim::E
     candidate.yaw = yaw;
     candidate.T_map_imu_guess = initial_guess_from_candidate(entry, yaw, *frame);
     candidate.translation_distance = (candidate.T_map_imu_guess.translation() - frame->T_world_imu.translation()).norm();
-    if (options_.max_candidate_translation_delta > 0.0 && candidate.translation_distance > options_.max_candidate_translation_delta) {
+    candidate.ranking_score = candidate.descriptor_distance + options_.candidate_translation_weight * candidate.translation_distance;
+
+    QueryCandidateDebug debug_candidate;
+    debug_candidate.submap_id = candidate.submap_id;
+    debug_candidate.descriptor_distance = candidate.descriptor_distance;
+    debug_candidate.yaw = candidate.yaw;
+    debug_candidate.translation_distance = candidate.translation_distance;
+    debug_candidate.passed_descriptor = distance <= options_.max_descriptor_distance;
+    debug_candidate.passed_translation =
+      !(options_.max_candidate_translation_delta > 0.0 && candidate.translation_distance > options_.max_candidate_translation_delta);
+    debug_candidate.candidate = candidate;
+    last_query_diagnostics_.topk.push_back(debug_candidate);
+
+    if (!std::isfinite(distance) || distance > options_.max_descriptor_distance) {
+      last_query_diagnostics_.filtered_by_descriptor++;
       continue;
     }
-    candidate.ranking_score = candidate.descriptor_distance + options_.candidate_translation_weight * candidate.translation_distance;
+
+    if (options_.max_candidate_translation_delta > 0.0 && candidate.translation_distance > options_.max_candidate_translation_delta) {
+      last_query_diagnostics_.filtered_by_translation++;
+      continue;
+    }
     candidates.push_back(candidate);
   }
+
+  last_query_diagnostics_.candidates_before_filter = static_cast<int>(last_query_diagnostics_.topk.size());
 
   std::sort(candidates.begin(), candidates.end(), [](const RelocalizationCandidate& lhs, const RelocalizationCandidate& rhs) {
     if (lhs.ranking_score == rhs.ranking_score) {
@@ -99,11 +137,38 @@ std::vector<RelocalizationCandidate> ScanContextRelocalizer::query(const glim::E
     return lhs.ranking_score < rhs.ranking_score;
   });
 
+  std::sort(last_query_diagnostics_.topk.begin(), last_query_diagnostics_.topk.end(), [](const QueryCandidateDebug& lhs, const QueryCandidateDebug& rhs) {
+    if (lhs.descriptor_distance == rhs.descriptor_distance) {
+      return lhs.submap_id < rhs.submap_id;
+    }
+    return lhs.descriptor_distance < rhs.descriptor_distance;
+  });
+
+  last_query_diagnostics_.topk_returned = static_cast<int>(last_query_diagnostics_.topk.size());
+
   if (limit > 0 && static_cast<int>(candidates.size()) > limit) {
     candidates.resize(limit);
   }
+  last_query_diagnostics_.candidates_after_filter = static_cast<int>(candidates.size());
+  if (candidates.empty()) {
+    if (last_query_diagnostics_.topk.empty()) {
+      last_query_diagnostics_.failure_reason = "no_topk";
+    } else if (last_query_diagnostics_.filtered_by_descriptor >= last_query_diagnostics_.candidates_before_filter) {
+      last_query_diagnostics_.failure_reason = "all_filtered_by_descriptor_distance";
+    } else if (last_query_diagnostics_.filtered_by_translation > 0) {
+      last_query_diagnostics_.failure_reason = "all_filtered_by_translation";
+    } else {
+      last_query_diagnostics_.failure_reason = "unknown";
+    }
+  } else {
+    last_query_diagnostics_.failure_reason = "success";
+  }
 
   return candidates;
+}
+
+ScanContextRelocalizer::QueryDiagnostics ScanContextRelocalizer::last_query_diagnostics() const {
+  return last_query_diagnostics_;
 }
 
 Eigen::MatrixXd ScanContextRelocalizer::make_descriptor(const gtsam_points::PointCloud::ConstPtr& cloud, const Eigen::Vector3d& center) const {
@@ -150,6 +215,18 @@ Eigen::MatrixXd ScanContextRelocalizer::make_descriptor(const gtsam_points::Poin
   }
 
   return descriptor;
+}
+
+int ScanContextRelocalizer::count_nonempty_bins(const Eigen::MatrixXd& descriptor) const {
+  int count = 0;
+  for (int r = 0; r < descriptor.rows(); r++) {
+    for (int c = 0; c < descriptor.cols(); c++) {
+      if (std::isfinite(descriptor(r, c)) && std::abs(descriptor(r, c)) > 1e-9) {
+        count++;
+      }
+    }
+  }
+  return count;
 }
 
 double ScanContextRelocalizer::descriptor_distance(const Eigen::MatrixXd& target, const Eigen::MatrixXd& query, int& best_shift) const {

@@ -87,6 +87,7 @@ stdout_log="$output_dir/command.stdout.log"
 stderr_log="$output_dir/command.stderr.log"
 pid_file="$output_dir/command.pid"
 exit_code_file="$output_dir/exit_code.txt"
+process_tree_file="$output_dir/process_tree.txt"
 
 printf '%q ' "$@" | sed 's/ $/\n/' > "$command_file"
 
@@ -141,6 +142,12 @@ if [[ -z "$main_pid" ]] || ! kill -0 "$main_pid" 2>/dev/null; then
 fi
 
 echo "main_pid=${main_pid}" >> "$meta_file"
+{
+  echo "# initial process tree for pid ${main_pid}"
+  ps -o pid,ppid,pgid,stat,comm,args --forest -g "$(ps -o pgid= -p "$main_pid" | tr -d ' ')" -ww 2>/dev/null || \
+    ps -o pid,ppid,stat,comm,args -p "$main_pid" -ww 2>/dev/null || true
+  echo
+} > "$process_tree_file"
 
 "$script_dir/monitor_ps.sh" "$main_pid" "$output_dir/ps_samples.csv" "$interval" &
 collector_pids+=("$!")
@@ -169,6 +176,11 @@ set -e
 
 echo "$exit_code" > "$exit_code_file"
 echo "end_time_iso=$(date -Iseconds)" >> "$meta_file"
+{
+  echo "# final process snapshot after command exit"
+  ps -o pid,ppid,pgid,stat,comm,args -p "$main_pid" -ww 2>/dev/null || true
+  echo
+} >> "$process_tree_file"
 
 for pid in "${collector_pids[@]:-}"; do
   if kill -0 "$pid" 2>/dev/null; then

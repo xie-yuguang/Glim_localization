@@ -33,6 +33,23 @@ struct MatchingOptions {
   double vgicp_voxelmap_scaling_factor = 2.0;
 };
 
+struct VerifyRawTopkOptions {
+  bool enable = false;
+  int topk = 10;
+  double max_descriptor_distance = 0.55;
+  bool require_geometric_verification = true;
+  bool allow_descriptor_rejected_candidates = true;
+};
+
+struct RecoveringOptions {
+  bool enable = true;
+  int stable_frames = 3;
+  double max_recovery_correction_translation = 2.0;
+  double max_recovery_correction_angle = 0.5;
+  bool require_no_rejection = true;
+  bool write_trajectory_during_recovering = true;
+};
+
 struct RelocalizationOptions {
   bool enable = true;
   int max_candidates = 5;
@@ -46,6 +63,48 @@ struct RelocalizationOptions {
   int verification_target_max_submaps = 4;
   double verification_target_max_distance = 20.0;
   int recovery_stable_frames = 2;
+  VerifyRawTopkOptions verify_raw_topk;
+  RecoveringOptions recovering;
+};
+
+struct RelocalizationDebugOptions {
+  bool enable = false;
+  int dump_topk = 10;
+  bool dump_rejected_candidates = true;
+  bool verify_rejected_topk = false;
+  int verify_rejected_topk_k = 5;
+};
+
+struct DebugOptions {
+  bool csv_enable = false;
+  std::string csv_path = "/tmp/glim_localization_debug.csv";
+};
+
+struct SmootherGuardOptions {
+  bool enable = false;
+  std::string mode = "hold_last_pose_prior";
+  int max_lost_frames_without_prior = 0;
+  int max_consecutive_hold_priors = 30;
+  bool write_trajectory_during_hold = false;
+  bool publish_pose_during_hold = false;
+};
+
+struct TargetRebuildGuardOptions {
+  bool enable = false;
+  int confirmation_frames = 2;
+  double near_threshold_ratio = 0.8;
+  bool force_degraded_on_large_correction = true;
+  double consistency_translation = 1.0;
+  double consistency_angle = 0.3;
+  int cooldown_frames = 3;
+};
+
+struct LostRecoveryOptions {
+  bool enable = false;
+  int relocalization_period_frames = 5;
+  int recovery_stable_frames = 3;
+  int max_lost_frames_before_pause = 3;
+  bool write_trajectory_while_lost = false;
 };
 
 struct RosOutputOptions {
@@ -77,6 +136,11 @@ struct LocalizationOptions {
   TargetMapOptions target_map;
   MatchingOptions matching;
   RelocalizationOptions relocalization;
+  RelocalizationDebugOptions relocalization_debug;
+  DebugOptions debug;
+  SmootherGuardOptions smoother_guard;
+  TargetRebuildGuardOptions target_rebuild_guard;
+  LostRecoveryOptions lost_recovery;
   RosOutputOptions ros;
 
   static LocalizationOptions load();

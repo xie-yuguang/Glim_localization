@@ -118,6 +118,16 @@ def compute_total_distance(samples: Sequence[TrajectorySample]) -> float:
   return total
 
 
+def compute_max_step(samples: Sequence[TrajectorySample]) -> float:
+  max_step = 0.0
+  for prev, cur in zip(samples[:-1], samples[1:]):
+    dx = cur.x - prev.x
+    dy = cur.y - prev.y
+    dz = cur.z - prev.z
+    max_step = max(max_step, math.sqrt(dx * dx + dy * dy + dz * dz))
+  return max_step
+
+
 def bounds(values: Iterable[float]) -> Tuple[float, float]:
   values = list(values)
   return min(values), max(values)
@@ -129,15 +139,29 @@ def print_stats(samples: Sequence[TrajectorySample]) -> None:
   zs = [s.z for s in samples]
   start = samples[0]
   end = samples[-1]
+  max_step = compute_max_step(samples)
+  total_distance = compute_total_distance(samples)
+  span_x = max(xs) - min(xs)
+  span_y = max(ys) - min(ys)
+  span_z = max(zs) - min(zs)
+  suspicious_divergence = (
+    max(abs(value) for value in [min(xs), max(xs), min(ys), max(ys), min(zs), max(zs)]) > 1000.0
+    or max_step > 50.0
+    or max(span_x, span_y, span_z) > 200.0
+    or total_distance > 10000.0
+  )
 
   print(f"frames: {len(samples)}")
   print(f"duration_sec: {end.stamp - start.stamp:.3f}")
-  print(f"total_distance_m: {compute_total_distance(samples):.3f}")
+  print(f"total_distance_m: {total_distance:.3f}")
+  print(f"max_step_m: {max_step:.3f}")
   print(f"start_xyz: ({start.x:.3f}, {start.y:.3f}, {start.z:.3f})")
   print(f"end_xyz: ({end.x:.3f}, {end.y:.3f}, {end.z:.3f})")
   print(f"x_bounds: ({min(xs):.3f}, {max(xs):.3f})")
   print(f"y_bounds: ({min(ys):.3f}, {max(ys):.3f})")
   print(f"z_bounds: ({min(zs):.3f}, {max(zs):.3f})")
+  print(f"span_xyz: ({span_x:.3f}, {span_y:.3f}, {span_z:.3f})")
+  print(f"suspicious_divergence: {'true' if suspicious_divergence else 'false'}")
 
 
 def resolve_output_paths(input_path: Path, output_arg: str, want_2d: bool, want_3d: bool) -> List[Tuple[str, Path]]:

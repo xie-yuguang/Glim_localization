@@ -129,11 +129,19 @@ endif()
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(DIRECTORY config DESTINATION ${CMAKE_INSTALL_DATADIR})
+install(DIRECTORY launch DESTINATION ${CMAKE_INSTALL_DATADIR}
+  PATTERN "__pycache__" EXCLUDE
+  PATTERN "*.pyc" EXCLUDE
+)
 install(DIRECTORY rviz DESTINATION ${CMAKE_INSTALL_DATADIR})
 install(PROGRAMS
   tools/run_offline_localization.sh
   tools/run_standard_experiment.sh
+  tools/run_smoke_baseline_10s.sh
+  tools/run_phase0_regression_matrix.sh
   tools/plot_trajectory.py
+  tools/analyze_debug_csv.py
+  tools/sweep_scan_context_descriptors.py
   tools/monitor/run_with_time.sh
   tools/monitor/monitor_ps.sh
   tools/monitor/monitor_pidstat.sh
@@ -165,7 +173,14 @@ target_link_libraries(benchmark_localization
   glim_localization
 )
 
-install(TARGETS glim_localization_map_info benchmark_localization
+add_executable(check_scan_context_relocalizer
+  tools/check_scan_context_relocalizer.cpp
+)
+target_link_libraries(check_scan_context_relocalizer
+  glim_localization
+)
+
+install(TARGETS glim_localization_map_info benchmark_localization check_scan_context_relocalizer
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 

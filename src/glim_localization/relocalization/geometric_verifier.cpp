@@ -32,6 +32,10 @@ RelocalizationResult GeometricVerifier::verify(
   RelocalizationCandidate best_candidate;
   LocalTargetMap::Ptr best_target;
   bool best_found = false;
+  bool best_attempted_found = false;
+  RegistrationResult best_attempted_registration;
+  RelocalizationCandidate best_attempted_candidate;
+  LocalTargetMap::Ptr best_attempted_target;
 
   for (int i = 0; i < static_cast<int>(candidates.size()); i++) {
     const auto& candidate = candidates[i];
@@ -67,6 +71,16 @@ RelocalizationResult GeometricVerifier::verify(
       registration_result.residual,
       target->active_submap_ids().size());
 
+    const bool better_attempted =
+      !best_attempted_found || registration_result.score > best_attempted_registration.score ||
+      (registration_result.score == best_attempted_registration.score && registration_result.residual < best_attempted_registration.residual);
+    if (better_attempted) {
+      best_attempted_found = true;
+      best_attempted_candidate = candidate;
+      best_attempted_registration = registration_result;
+      best_attempted_target = target;
+    }
+
     if (!registration_result.accepted) {
       continue;
     }
@@ -96,6 +110,11 @@ RelocalizationResult GeometricVerifier::verify(
   }
 
   result.message = "no_verified_candidate";
+  if (best_attempted_found) {
+    result.candidate = best_attempted_candidate;
+    result.registration = best_attempted_registration;
+    result.target_map = best_attempted_target;
+  }
   return result;
 }
 
